@@ -31,19 +31,41 @@ namespace qmcplusplus
 {
 /** General SplineAdoptorReader to handle any unitcell
  */
+
+template<typename SA, bool distributed> 
+struct BsplineSetType;
+
 template<typename SA>
+struct BsplineSetType<SA,true>
+{
+  typedef DistributedBsplineSet<SA> type;
+};
+
+template<typename SA>
+struct BsplineSetType<SA,false>
+{
+  typedef BsplineSet<SA> type;
+};
+
+
+template<typename SA, bool DISTRIBUTED=false>
 struct SplineAdoptorReader: public BsplineReaderBase
 {
   typedef SA adoptor_type;
   typedef typename adoptor_type::DataType    DataType;
-  typedef typename adoptor_type::SplineType SplineType;
+
+  // DEAD CODE:  below is not used
+  //  typedef typename adoptor_type::SplineType SplineType;
 
   Array<std::complex<double>,3> FFTbox;
   Array<double,3> splineData_r, splineData_i;
   double rotate_phase_r, rotate_phase_i;
   std::vector<UBspline_3d_d*> spline_r;
   std::vector<UBspline_3d_d*> spline_i;
-  BsplineSet<adoptor_type>* bspline;
+  //  BsplineSet<adoptor_type>* bspline;
+  //DistributedBsplineSet<adoptor_type>* bspline;
+  typedef typename BsplineSetType<SA,DISTRIBUTED>::type BsplineType;
+  BsplineType *bspline;
   std::vector<int> OrbGroups;
   fftw_plan FFTplan;
 
@@ -139,7 +161,9 @@ struct SplineAdoptorReader: public BsplineReaderBase
     ReportEngine PRE("SplineC2XAdoptorReader","create_spline_set(spin,SPE*)");
     //Timer c_prep, c_unpack,c_fft, c_phase, c_spline, c_newphase, c_h5, c_init;
     //double t_prep=0.0, t_unpack=0.0, t_fft=0.0, t_phase=0.0, t_spline=0.0, t_newphase=0.0, t_h5=0.0, t_init=0.0;
-    bspline=new BsplineSet<adoptor_type>;
+    //    bspline=new BsplineSet<adoptor_type>;
+    //    bspline= new DistributedBsplineSet<adoptor_type>;
+    bspline = new BsplineType;
     app_log() << "  AdoptorName = " << bspline->AdoptorName << std::endl;
     if(bspline->is_complex)
       app_log() << "  Using complex einspline table" << std::endl;
@@ -147,6 +171,13 @@ struct SplineAdoptorReader: public BsplineReaderBase
       app_log() << "  Using real einspline table" << std::endl;
     if(bspline->is_soa_ready)
       app_log() << "  Can use SoA implementation for mGL" << std::endl;
+
+    if (DISTRIBUTED) {
+      // HACK HACK HACK:  for now, divide spline set across all ranks
+      int num_spline_groups = 1;
+      bspline->dist_group_comm = new Communicate(*myComm, num_spline_groups);
+    }
+      
 
     //baseclass handles twists
     check_twists(bspline,bandgroup);
@@ -245,8 +276,12 @@ struct SplineAdoptorReader: public BsplineReaderBase
           initialize_spline_serial(spin, bandgroup);
           app_log() << "  SplineAdoptorReader initialize_spline_serial " << now.elapsed() << " sec" << std::endl;
         }
-        else
-        {
+        else if(DISTRIBUTED) {
+          now.restart();
+          initialize_spline_distributed(spin,bandgroup);
+          app_log() << "  SplineAdoptorReader initialize_spline_distributed " << now.elapsed() << " sec" << std::endl;
+        }
+        else {
           //now.restart();
           //initialize_spline_pio_bcast(spin);
           //app_log() << "  SplineAdoptorReader initialize_spline_pio_bcast " << now.elapsed() << " sec" << std::endl;
@@ -390,6 +425,30 @@ struct SplineAdoptorReader: public BsplineReaderBase
     }
     myComm->barrier();
     chunked_bcast(myComm, bspline->MultiSpline);
+  }
+
+
+  void 
+  initialize_spline_distributed(int spin, const BandInfoGroup& bandgroup)
+  {
+    int iorb_begin = bspline->my_unique_begin;
+    int iorb_end   = bspline->my_unique_end;
+
+    hdf_archive h5f(bspline->dist_group_comm,false);
+    h5f.open(mybuilder->H5FileName,H5F_ACC_RDONLY);
+    Vector<std::complex<double> > cG(mybuilder->Gvecs[0].size());
+    const std::vector<BandInfo>& cur_bands=bandgroup.myBands;
+    bool foundit = true;
+    for(int ib=0, iorb=iorb_begin; iorb<iorb_end; ib++, iorb++) {
+      int ti=cur_bands[iorb].TwistIndex;
+      std::string s=psi_g_path(ti,spin,cur_bands[iorb].BandIndex);
+      foundit &= h5f.read(cG,s);
+      fft_spline(cG,ti,ib);
+      bspline->set_spline(spline_r[ib],spline_i[ib],cur_bands[iorb].TwistIndex,ib,0);
+    }
+    // Check to make sure all nodes found their datasets in the appropriate place
+
+
   }
 
   void initialize_spline_pio(int spin, const BandInfoGroup& bandgroup)

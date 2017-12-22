@@ -158,9 +158,6 @@ public:
                                    Array<GradType,3>& dG,
                                    Matrix<RealType>& dL) {}
 
-  //virtual void evaluateGradDerivatives(const ParticleSet::ParticleGradient_t& G_in,
-  //                                     std::vector<RealType>& dgradlogpsi);
-
   inline void reportStatus(std::ostream& os)
   {
   }
@@ -249,6 +246,19 @@ public:
 //       virtual DiracDeterminantBase* makeCopy(ParticleSet& tqp, SPOSetBase* spo) const {return makeCopy(spo); };
 
   virtual void get_ratios(ParticleSet& P, std::vector<ValueType>& ratios);
+
+  virtual void
+  completeDistributedEvaluations(int generation) 
+  {
+    Phi->completeDistributedEvaluations(generation);
+  }
+
+  Communicate*
+  getDistributedOrbitalComm() const
+  {
+    return Phi->getDistributedOrbitalComm();
+  }
+
   ///total number of particles
   int NP;
   ///number of single-particle orbitals which belong to this Dirac determinant

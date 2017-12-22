@@ -830,4 +830,28 @@ void TrialWaveFunction::get_ratios(ParticleSet& P, std::vector<ValueType>& ratio
   }
 }
 
+
+void 
+TrialWaveFunction::completeDistributedEvaluations(int generation,
+                                                  int iat_in_group)
+{
+  for (auto& z : Z) {
+    z->completeDistributedEvaluations(generation, iat_in_group);
+  }
+}
+
+Communicate*
+TrialWaveFunction::getDistributedOrbitalComm() const
+{
+  for (auto& z : Z) {
+    Communicate* comm = 
+      z->getDistributedOrbitalComm();
+    if (comm) {
+      return comm;
+    }
+  }
+  return nullptr;
+}
+
+
 }

@@ -106,7 +106,6 @@ struct BsplineReaderBase
   template<typename SPE>
   inline void check_twists(SPE* bspline, const BandInfoGroup& bandgroup)
   {
-
     //init(orbitalSet,bspline);
     bspline->PrimLattice=mybuilder->PrimCell;
     bspline->SuperLattice=mybuilder->SuperCell;
@@ -116,20 +115,61 @@ struct BsplineReaderBase
     int N = bandgroup.getNumDistinctOrbitals();
     int numOrbs=bandgroup.getNumSPOs();
 
+    bspline->my_unique_begin = 0;
+    bspline->my_unique_end   = N;
+    if (bspline->dist_group_comm) {
+      int dist_group_size = bspline->dist_group_comm->size();
+      int dist_rank       = bspline->dist_group_comm->rank();
+      bspline->my_unique_begin = dist_rank*N / dist_group_size;
+      bspline->my_unique_end   = (dist_rank+1)*N / dist_group_size;
+      bspline->dist_spo_offsets.resize(dist_group_size+1);
+    }
+
+    int myNumUnique = bspline->my_unique_end - bspline->my_unique_begin;
+
     bspline->setOrbitalSetSize(numOrbs);
-    bspline->resizeStorage(N,N);
+    bspline->resizeStorage(myNumUnique, myNumUnique);
 
     bspline->first_spo=bandgroup.getFirstSPO();
     bspline->last_spo =bandgroup.getLastSPO();
 
     int num = 0;
     const std::vector<BandInfo>& cur_bands=bandgroup.myBands;
+    int my_first_spo = 0;
     for (int iorb=0; iorb<N; iorb++)
     {
       int ti = cur_bands[iorb].TwistIndex;
-      bspline->kPoints[iorb] = mybuilder->PrimCell.k_cart(mybuilder->TwistAngles[ti]); //twist);
-      bspline->MakeTwoCopies[iorb] = (num < (numOrbs-1)) && cur_bands[iorb].MakeTwoCopies;
-      num += bspline->MakeTwoCopies[iorb] ? 2 : 1;
+
+      if (iorb == bspline->my_unique_begin) {
+        my_first_spo = num;
+      }
+
+      bool make_two_copies = cur_bands[iorb].MakeTwoCopies && (num<(numOrbs-1));
+      if (iorb >= bspline->my_unique_begin && iorb < bspline->my_unique_end) {
+        bspline->kPoints[iorb-bspline->my_unique_begin] = mybuilder->PrimCell.k_cart(mybuilder->TwistAngles[ti]); //twist);
+        bspline->MakeTwoCopies[iorb-bspline->my_unique_begin] = make_two_copies;
+      }
+      num += make_two_copies ? 2 : 1;
+    }
+
+    // Make sure all bspline instances know which rank handles which SPOs
+    if (bspline->dist_group_comm) {
+      bspline->dist_spo_offsets[bspline->dist_group_comm->rank()] = my_first_spo;
+      std::vector<int> send_buf(1);
+      send_buf[0] = my_first_spo;
+      bspline->dist_group_comm->allgather(send_buf, bspline->dist_spo_offsets, 1);
+      // Set last offset to the total number of SPOs
+      bspline->dist_spo_offsets[bspline->dist_group_comm->size()] = numOrbs;
+      for (int i=0; i< bspline->dist_group_comm->size(); ++i) {
+        app_log() << "Group rank " << i << " computes orbitals [" <<
+          bspline->dist_spo_offsets[i] << "," <<  
+          bspline->dist_spo_offsets[i+1]  << ")\n";
+      }
+      size_t group_rank = bspline->dist_group_comm->rank();
+      size_t group_size = bspline->dist_group_comm->size();
+      size_t num_local_spos = (bspline->dist_spo_offsets[group_rank+1] - 
+                               bspline->dist_spo_offsets[group_rank+0]);
+      bspline->resizeRemoteStorage(group_size, num_local_spos);
     }
 
     app_log() << "NumDistinctOrbitals " << N << " numOrbs = " << numOrbs << std::endl;

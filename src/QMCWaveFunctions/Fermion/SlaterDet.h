@@ -267,6 +267,25 @@ public:
       Dets[i]->evaluateGradDerivatives(G_in, dgradlogpsi);
   }
 
+
+  /// This is called at various points to allow for wave function work
+  /// imbalance between nodes within a group that is distributing
+  /// orbitals.  This should be called once per particle group.
+  virtual void
+  completeDistributedEvaluations(int generation,
+                                 int iat_in_group) override
+  {
+    Dets[getDetID(iat_in_group)]->completeDistributedEvaluations(generation);
+  }
+
+  virtual Communicate*
+  getDistributedOrbitalComm() const
+  {
+    return Dets[0]->getDistributedOrbitalComm();
+  }
+
+
+
 #ifdef QMC_CUDA
   /////////////////////////////////////////////////////
   // Functions for vectorized evaluation and updates //

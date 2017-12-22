@@ -19,6 +19,8 @@
 #ifndef OHMMS_COMMUNICATION_OPERATORS_MPI_H
 #define OHMMS_COMMUNICATION_OPERATORS_MPI_H
 #include "Utilities/PooledData.h"
+#include "Numerics/VectorViewer.h"
+
 #include <stdint.h>
 ///dummy declarations to be specialized
 template<typename T> inline void gsum(T&, int)
@@ -27,6 +29,11 @@ template<typename T> inline void gsum(T&, int)
 }
 
 template<typename T> inline void Communicate::allreduce(T& )
+{
+  APP_ABORT("Need specialization for allreduce(T&)");
+}
+
+template<typename T> inline void Communicate::allreducemax(T& )
 {
   APP_ABORT("Need specialization for allreduce(T&)");
 }
@@ -442,6 +449,51 @@ Communicate::allreduce(qmcplusplus::Matrix<double>& g)
   copy(gt.begin(),gt.end(),g.data());
 }
 
+
+
+template<>
+inline void
+Communicate::allreducemax(int& g)
+{
+  if(d_ncontexts==1)
+    return;
+  int gt = g;
+  MPI_Allreduce(&(gt), &(g), 1, MPI_INT, MPI_MAX, myMPI);
+}
+
+template<>
+inline void
+Communicate::allreducemax(long& g)
+{
+  if(d_ncontexts==1)
+    return;
+  long gt = g;
+  MPI_Allreduce(&(gt), &(g), 1, MPI_LONG, MPI_MAX, myMPI);
+}
+
+
+template<>
+inline void
+Communicate::allreducemax(float& g)
+{
+  if(d_ncontexts==1)
+    return;
+  float gt = g;
+  MPI_Allreduce(&(gt), &(g), 1, MPI_FLOAT, MPI_MAX, myMPI);
+}
+
+template<>
+inline void
+Communicate::allreducemax(double& g)
+{
+  if(d_ncontexts==1)
+    return;
+  double gt = g;
+  MPI_Allreduce(&(gt), &(g), 1, MPI_DOUBLE, MPI_MAX, myMPI);
+}
+
+
+
 template<>
 inline void
 Communicate::reduce(std::vector<float>& g)
@@ -804,6 +856,7 @@ Communicate::bcast(std::vector<qmcplusplus::TinyVector<float,3> > &g)
   MPI_Bcast(&(g[0][0]), 3*g.size(), MPI_FLOAT, 0, myMPI);
 }
 
+
 template<>
 inline void
 Communicate::bcast(std::vector<int>& g)
@@ -880,12 +933,46 @@ Communicate::isend(int dest, int tag, std::vector<double>& g)
 }
 
 template<> inline Communicate::request
+Communicate::isend(int dest, int tag, qmcplusplus::VectorViewer<double>& g)
+{
+  request r;
+  MPI_Isend(&(g[0]),g.size(),MPI_DOUBLE,dest,tag, myMPI,&r);
+  return r;
+}
+
+template<> inline Communicate::request
+Communicate::isend(int dest, int tag, qmcplusplus::VectorViewer<float>& g)
+{
+  request r;
+  MPI_Isend(&(g[0]),g.size(),MPI_FLOAT,dest,tag, myMPI,&r);
+  return r;
+}
+
+
+template<> inline Communicate::request
 Communicate::irecv(int source, int tag, std::vector<double>& g)
 {
   request r;
   MPI_Irecv(&(g[0]),g.size(),MPI_DOUBLE,source,tag, myMPI,&r);
   return r;
 }
+
+template<> inline Communicate::request
+Communicate::irecv(int source, int tag, qmcplusplus::VectorViewer<double>& g)
+{
+  request r;
+  MPI_Irecv(&(g[0]),g.size(),MPI_DOUBLE,source,tag, myMPI,&r);
+  return r;
+}
+
+template<> inline Communicate::request
+Communicate::irecv(int source, int tag, qmcplusplus::VectorViewer<float>& g)
+{
+  request r;
+  MPI_Irecv(&(g[0]),g.size(),MPI_FLOAT,source,tag, myMPI,&r);
+  return r;
+}
+
 
 template<>
 inline void
@@ -969,6 +1056,34 @@ Communicate::allgather(std::vector<int>& sb,
 #endif
   MPI_Allgather(&sb[0], count, MPI_INT, &rb[0], count, MPI_INT, myMPI);
 }
+
+
+template<>
+inline void
+Communicate::allgather(std::vector<float>& sb,
+                       std::vector<float>& rb, int count)
+{
+#if defined(_CRAYMPI)
+  const int cray_short_msg_size=128000;
+  if(sb.size()*sizeof(int)<cray_short_msg_size)
+    this->barrier();
+#endif
+  MPI_Allgather(&sb[0], count, MPI_FLOAT, &rb[0], count, MPI_FLOAT, myMPI);
+}
+
+template<>
+inline void
+Communicate::allgather(std::vector<double>& sb,
+                       std::vector<double>& rb, int count)
+{
+#if defined(_CRAYMPI)
+  const int cray_short_msg_size=128000;
+  if(sb.size()*sizeof(int)<cray_short_msg_size)
+    this->barrier();
+#endif
+  MPI_Allgather(&sb[0], count, MPI_DOUBLE, &rb[0], count, MPI_DOUBLE, myMPI);
+}
+
 
 
 
@@ -1155,6 +1270,16 @@ Communicate::gmax(std::vector<int>& g, mpi_comm_type comm)
   MPI_Allreduce(&(g[0]),&(gt[0]),g.size(),MPI_INT,MPI_MAX,comm);
   g = gt;
 }
+
+template<>
+inline void
+Communicate::gmax(int& g, mpi_comm_type comm)
+{
+  int gt;
+  MPI_Allreduce(&g,&gt,1,MPI_INT,MPI_MAX,comm);
+  g = gt;
+}
+
 
 template<>
 inline void
@@ -1449,6 +1574,9 @@ Communicate::allreduce(qmcplusplus::Matrix<std::complex<float> >& g)
                 myMPI);
   std::copy(gt.begin(),gt.end(),g.data());
 }
+
+
+
 
 template<>
 inline void

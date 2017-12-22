@@ -413,6 +413,20 @@ struct OrbitalBase: public QMCTraits
   virtual void evaluateDerivRatios(VirtualParticleSet& VP, const opt_variables_type& optvars,
       std::vector<ValueType>& ratios, Matrix<ValueType>& dratios);
 
+  /// This is called at various points to allow for wave function work
+  /// imbalance between nodes within a group that is distributing
+  /// orbitals.  This should be called once per particle group.
+  virtual void
+  completeDistributedEvaluations(int generation,
+                                 int iat_in_group) { }
+
+  virtual Communicate*
+  getDistributedOrbitalComm() const
+  {
+    return (Communicate*) nullptr;
+  }
+
+
   ///** copy data members from old
   // * @param old existing OrbitalBase from which all the data members are copied.
   // *

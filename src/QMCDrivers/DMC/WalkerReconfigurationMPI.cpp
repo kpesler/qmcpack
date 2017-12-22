@@ -238,11 +238,17 @@ void WalkerReconfigurationMPI::sendWalkers(MCWalkerConfiguration& W,
   {
     if(plusN[ic]==MyContext)
     {
-      //OOMPI_Packed sendBuffer(wbuffer_size,OOMPI_COMM_WORLD);
-      OOMPI_Packed sendBuffer(wbuffer_size,myComm->getComm());
-      W[plus[last]]->putMessage(sendBuffer);
-      //OOMPI_COMM_WORLD[minusN[ic]].Send(sendBuffer);
-      myComm->getComm()[minusN[ic]].Send(sendBuffer);
+      if (minusN.size() > ic) {
+        //OOMPI_Packed sendBuffer(wbuffer_size,OOMPI_COMM_WORLD);
+        OOMPI_Packed sendBuffer(wbuffer_size,myComm->getComm());
+        W[plus[last]]->putMessage(sendBuffer);
+        //OOMPI_COMM_WORLD[minusN[ic]].Send(sendBuffer);
+        myComm->getComm()[minusN[ic]].Send(sendBuffer);
+      }
+      else {
+        // Noone left to send to.
+        break;
+      }
       --last;
     }
     ++ic;

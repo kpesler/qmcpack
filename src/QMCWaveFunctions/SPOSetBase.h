@@ -93,10 +93,10 @@ public:
    * Several user classes can own SPOSetBase and use objectName as counter
    */
   std::string objectName;
-  
+
   ///Pass Communicator
   Communicate *myComm;
-  
+
   /** constructor */
   SPOSetBase();
 
@@ -301,6 +301,18 @@ public:
   // Should be left empty for other derived classes
   virtual void rotate_B(const std::vector<RealType> &rot_mat) { };
 
+  virtual void
+  completeDistributedEvaluations(int generation) 
+  {
+  }
+
+  virtual Communicate*
+  getDistributedOrbitalComm() const
+  {
+    return (Communicate*)nullptr;
+  }
+
+
 #ifdef QMC_CUDA
 
   /** evaluate the values of this single-particle orbital set
@@ -337,7 +349,6 @@ public:
   virtual void
   evaluate (std::vector<PosType> &pos, gpu::device_vector<CudaComplexType*> &phi);
 #endif
-
 
 protected:
   bool putOccupation(xmlNodePtr occ_ptr);

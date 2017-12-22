@@ -13,6 +13,7 @@
 #include <Utilities/ProgressReportEngine.h>
 #include "QMCWaveFunctions/EinsplineSetBuilder.h"
 #include "QMCWaveFunctions/EinsplineAdoptor.h"
+#include "QMCWaveFunctions/DistributedBsplineSet.h"
 #include "QMCWaveFunctions/SplineR2RAdoptor.h"
 #include "QMCWaveFunctions/BsplineFactory/SplineR2RAdoptor.h"
 #include "QMCWaveFunctions/BsplineFactory/HybridRealAdoptor.h"
@@ -25,16 +26,28 @@
 namespace qmcplusplus
 {
 
-  BsplineReaderBase* createBsplineRealDouble(EinsplineSetBuilder* e, bool hybrid_rep)
+  BsplineReaderBase* 
+  createBsplineRealDouble(EinsplineSetBuilder* e, 
+                          bool hybrid_rep, bool distributed)
   {
     BsplineReaderBase* aReader=nullptr;
 #if defined(QMC_ENABLE_SOA_DET)
-    if(hybrid_rep)
+    if(hybrid_rep) {
       aReader= new SplineHybridAdoptorReader<HybridRealSoA<SplineR2RSoA<double,OHMMS_PRECISION> > >(e);
-    else
-      aReader= new SplineAdoptorReader<SplineR2RSoA<double,OHMMS_PRECISION> >(e);
+    }
+    else if (distributed) {
+      aReader= new SplineAdoptorReader<SplineR2RSoA<double,OHMMS_PRECISION>,true >(e);
+    }
+    else {
+      aReader= new SplineAdoptorReader<SplineR2RSoA<double,OHMMS_PRECISION>,false >(e);
+    }
 #else
-    aReader= new SplineAdoptorReader<SplineR2RAdoptor<double,OHMMS_PRECISION,3> >(e);
+    if (distributed) {
+      aReader= new SplineAdoptorReader<SplineR2RAdoptor<double,OHMMS_PRECISION,3>,true >(e);
+    }
+    else {
+      aReader= new SplineAdoptorReader<SplineR2RAdoptor<double,OHMMS_PRECISION,3>,false >(e);
+    }
 #endif
     return aReader;
   }

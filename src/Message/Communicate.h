@@ -220,6 +220,7 @@ public:
 #endif
 
   template<typename T> void allreduce(T&);
+  template<typename T> void allreducemax(T&);
   template<typename T> void reduce(T&);
   template<typename T> void reduce(T* restrict, T* restrict, int n);
   template<typename T> void reduce_in_place(T* restrict, int n);

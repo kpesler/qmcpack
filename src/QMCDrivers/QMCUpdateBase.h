@@ -204,6 +204,14 @@ public:
   ///move a walker
   virtual void advanceWalker(Walker_t& thisWalker, bool recompute)=0;
 
+  /** Dummy evaluation to allow distributed orbital evaluation to work
+   *  in the presence of walker population imbalance between nodes.
+   */
+  virtual void
+  advanceRemoteWalker(bool recompute)
+  {
+  }
+
   virtual RealType advanceWalkerForEE(Walker_t& w1, std::vector<PosType>& dR, std::vector<int>& iats, std::vector<int>& rs, std::vector<RealType>& ratios)
   {
     return 0.0;

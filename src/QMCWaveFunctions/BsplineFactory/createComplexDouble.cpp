@@ -16,6 +16,7 @@
 #include <Utilities/ProgressReportEngine.h>
 #include "QMCWaveFunctions/EinsplineSetBuilder.h"
 #include "QMCWaveFunctions/EinsplineAdoptor.h"
+#include "QMCWaveFunctions/DistributedBsplineSet.h"
 #include "QMCWaveFunctions/SplineC2XAdoptor.h"
 #if defined(QMC_ENABLE_SOA_DET)
 #include "QMCWaveFunctions/BsplineFactory/SplineC2RAdoptor.h"
@@ -31,7 +32,9 @@
 namespace qmcplusplus
 {
 
-  BsplineReaderBase* createBsplineComplexDouble(EinsplineSetBuilder* e, bool hybrid_rep)
+  BsplineReaderBase* 
+  createBsplineComplexDouble(EinsplineSetBuilder* e, 
+                             bool hybrid_rep, bool distributed)
   {
     typedef OHMMS_PRECISION RealType;
     BsplineReaderBase* aReader=nullptr;
@@ -39,22 +42,42 @@ namespace qmcplusplus
 #if defined(QMC_COMPLEX)
 
   #if defined(QMC_ENABLE_SOA_DET)
-    if(hybrid_rep)
+    if(hybrid_rep) {
       aReader= new SplineHybridAdoptorReader<HybridCplxSoA<SplineC2CSoA<double,RealType> > >(e);
-    else
-      aReader= new SplineAdoptorReader<SplineC2CSoA<double,RealType> >(e);
+    }
+    else if (distributed) {
+      aReader= new SplineAdoptorReader<SplineC2CSoA<double,RealType>,true >(e);
+    }
+    else {
+      aReader= new SplineAdoptorReader<SplineC2CSoA<double,RealType>,false >(e);
+    }
   #else
-    aReader= new SplineAdoptorReader<SplineC2CPackedAdoptor<double,RealType,3> >(e);
+    if (distributed) {
+      aReader= new SplineAdoptorReader<SplineC2CPackedAdoptor<double,RealType,3>,true >(e);
+    }
+    else {
+      aReader= new SplineAdoptorReader<SplineC2CPackedAdoptor<double,RealType,3>,false >(e);
+    }
   #endif
 #else //QMC_COMPLEX
 
   #if defined(QMC_ENABLE_SOA_DET)
-    if(hybrid_rep)
+    if(hybrid_rep) {
       aReader= new SplineHybridAdoptorReader<HybridCplxSoA<SplineC2RSoA<double,RealType> > >(e);
-    else
-      aReader= new SplineAdoptorReader<SplineC2RSoA<double,RealType> >(e);
-  #else
-    aReader= new SplineAdoptorReader<SplineC2RPackedAdoptor<double,RealType,3> >(e);
+    }
+    else if (distributed) {
+      aReader= new SplineAdoptorReader<SplineC2RSoA<double,RealType>,true >(e);
+    }
+    else {
+      aReader= new SplineAdoptorReader<SplineC2RSoA<double,RealType>,false >(e);
+    }
+#else 
+    if (distributed) {
+      aReader= new SplineAdoptorReader<SplineC2RPackedAdoptor<double,RealType,3>,true >(e);
+    }
+    else {
+      aReader= new SplineAdoptorReader<SplineC2RPackedAdoptor<double,RealType,3>,false >(e);
+    }
   #endif
 #endif
 

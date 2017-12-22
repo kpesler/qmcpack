@@ -21,6 +21,7 @@
 #include "QMCDrivers/DriftOperators.h"
 #include "OhmmsData/AttributeSet.h"
 #include "Message/OpenMP.h"
+#include "Message/CommOperatorsMPI.h"
 #if !defined(REMOVE_TRACEMANAGER)
 #include "Estimators/TraceManager.h"
 #else
@@ -365,9 +366,25 @@ void QMCUpdateBase::setMultiplicity(WalkerIter_t it, WalkerIter_t it_end)
 
 void QMCUpdateBase::advanceWalkers(WalkerIter_t it, WalkerIter_t it_end, bool recompute)
 {
+  int my_num_walkers = it_end - it;
   for (; it != it_end; ++it)
   {
     advanceWalker(**it,recompute);
+  }
+  Communicate* dist_comm = Psi.getDistributedOrbitalComm();
+  // If we're doing distributed orbital evaluation, then we need to
+  // make sure we handle walker imbalance between nodes by calling a
+  // "dummy" advance routine to keep advance calls operating in
+  // lock-step. 
+  if (dist_comm) {
+    int max_walkers = my_num_walkers;
+    dist_comm->allreducemax(max_walkers);
+    // printf("rank %d has %d walkers, max is %d\n",
+    //        dist_comm->rank(), my_num_walkers, max_walkers);
+    for (int i=my_num_walkers; i<max_walkers; ++i) {
+      //      printf("Advancing remote walkers in rank %d\n", dist_comm->rank());
+      advanceRemoteWalker(recompute);
+    }
   }
 }
 

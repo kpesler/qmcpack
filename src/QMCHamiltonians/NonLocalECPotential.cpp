@@ -110,6 +110,8 @@ NonLocalECPotential::Return_t
 NonLocalECPotential::evaluate(ParticleSet& P)
 {
   Value=0.0;
+
+
 #if !defined(REMOVE_TRACEMANAGER)
   if( streaming_particles)
   {
@@ -170,6 +172,7 @@ NonLocalECPotential::evaluate(ParticleSet& P)
     }
     else
     {
+#ifdef ION_OUTER_LOOP
       for(int iat=0; iat<NumIons; iat++)
       {
         if(PP[iat]==nullptr) continue;
@@ -181,6 +184,31 @@ NonLocalECPotential::evaluate(ParticleSet& P)
           Value += PP[iat]->evaluateOne(P,iat,Psi,iel,r,myTable->dr(nn),false,Txy);
         }
       }
+#else
+      // Distributed orbital evaluations requires that we keep all
+      // ranks in lock-step.  This requires calling
+      // Psi.completeDistributedEvaluations after completing each
+      // electron group.  For this reason, the electrons have to be
+      // the outer loop in this case, and the ions the inner loop.
+      for(int iat=0; iat<NumIons; iat++) {
+        if(PP[iat]==nullptr) continue;
+        PP[iat]->randomize_grid(*(P.Sphere[iat]),UpdateMode[PRIMARY]);
+      }
+      
+      for(int ig=0; ig<P.groups(); ++ig) {
+        for (int iel=P.first(ig); iel<P.last(ig); ++iel) {
+          for (int iat=0, nn=iel; iat<NumIons; iat++, nn+=myTable->targets()) {
+            // int nn = myTable->M[iat] + iel;
+            if(PP[iat]==nullptr) continue;
+            const RealType r(myTable->r(nn));
+            if(r>PP[iat]->Rmax) continue;
+            Value += PP[iat]->evaluateOne(P,iat,Psi,iel,r,myTable->dr(nn),false,Txy);
+          }
+        }
+        Psi.completeDistributedEvaluations(0, P.first(ig));
+      }
+#endif
+
     }
   }
 #if defined(TRACE_CHECK)
@@ -213,6 +241,7 @@ NonLocalECPotential::Return_t
 NonLocalECPotential::evaluate(ParticleSet& P, std::vector<NonLocalData>& Txy)
 {
   Value=0.0;
+
 #if !defined(REMOVE_TRACEMANAGER)
   if( streaming_particles)
   {
@@ -251,6 +280,7 @@ NonLocalECPotential::evaluate(ParticleSet& P, std::vector<NonLocalData>& Txy)
     }
     else
     {
+#ifdef ION_OUTER_LOOP
       for(int iat=0; iat<NumIons; iat++)
       {
         if(PP[iat]==nullptr) continue;
@@ -262,6 +292,32 @@ NonLocalECPotential::evaluate(ParticleSet& P, std::vector<NonLocalData>& Txy)
           Value += PP[iat]->evaluateOne(P,iat,Psi,iel,r,myTable->dr(nn),true,Txy);
         }
       }
+#else
+      // Distributed orbital evaluations requires that we keep all
+      // ranks in lock-step.  This requires calling
+      // Psi.completeDistributedEvaluations after completing each
+      // electron group.  For this reason, the electrons have to be
+      // the outer loop in this case, and the ions the inner loop.
+      for(int iat=0; iat<NumIons; iat++) {
+        if(PP[iat]==nullptr) continue;
+        PP[iat]->randomize_grid(*(P.Sphere[iat]),UpdateMode[PRIMARY]);
+      }
+      
+      for(int ig=0; ig<P.groups(); ++ig) {
+        for (int iel=P.first(ig); iel<P.last(ig); ++iel) {
+          for (int iat=0, nn=iel; iat<NumIons; iat++, nn+=myTable->targets()) {
+            // int nn = myTable->M[iat] + iel;
+            if(PP[iat]==nullptr) continue;
+            const RealType r(myTable->r(nn));
+            if(r>PP[iat]->Rmax) continue;
+            Value += PP[iat]->evaluateOne(P,iat,Psi,iel,r,myTable->dr(nn),false,Txy);
+          }
+        }
+        Psi.completeDistributedEvaluations(0, P.first(ig));
+      }
+#endif
+
+
     }
   }
 #if defined(TRACE_CHECK)

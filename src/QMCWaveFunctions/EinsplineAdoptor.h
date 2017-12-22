@@ -158,6 +158,12 @@ struct SplineAdoptorBase
   ///remap band
   aligned_vector<int> BandIndexMap;
 
+  /// Data members for distributed evaluation of spline set.
+  Communicate *dist_group_comm=nullptr;
+  size_t my_unique_begin=0;
+  size_t my_unique_end=0;
+  std::vector<int> dist_spo_offsets;
+
   ///name of the adoptor
   std::string AdoptorName;
   ///keyword used to match hdf5
@@ -178,6 +184,11 @@ struct SplineAdoptorBase
     GGt=dot(transpose(PrimLattice.G),PrimLattice.G);
     kPoints.resize(n);
     MakeTwoCopies.resize(n);
+  }
+
+  virtual void
+  resizeRemoteStorage(size_t group_size, size_t num_local_spos) 
+  {
   }
 
   ///remap kpoints to group general kpoints & special kpoints
@@ -265,11 +276,11 @@ struct BsplineSet: public SPOSetBase, public SplineAdoptor
 
   inline void evaluateValues(const ParticleSet& P, ValueMatrix_t& psiM)
   {
-    const size_t m=psiM.cols();
+    ValueVector_t psi(psiM.cols());
     for(int iat=0; iat<P.getTotalNum(); ++iat)
     {
-      ValueVector_t psi(psiM[iat],m);
       SplineAdoptor::evaluate_v(P,iat,psi);
+      std::copy(psi.begin(),psi.end(),psiM[iat]);
     }
   }
 
