@@ -277,11 +277,17 @@ struct SplineC2CSoA: public SplineAdoptorBase<ST,3>
   template<typename VV>
   inline void evaluate_v(const ParticleSet& P, const int iat, VV& psi)
   {
-    const PointType& r=P.R[iat];
+    evaluate_v(P.R[iat], psi);
+  }
+
+  template<typename VV>
+  inline void evaluate_v(const PointType &r, VV& psi)
+  {
     PointType ru(PrimLattice.toUnit_floor(r));
     SplineInst->evaluate(ru,myV);
     assign_v(r,psi);
   }
+
 
   /** assign_vgl
    */
@@ -435,11 +441,17 @@ struct SplineC2CSoA: public SplineAdoptorBase<ST,3>
   template<typename VV, typename GV>
   inline void evaluate_vgl(const ParticleSet& P, const int iat, VV& psi, GV& dpsi, VV& d2psi)
   {
-    const PointType& r=P.R[iat];
+    evaluate_vgl(P.R[iat], psi, dpsi, d2psi);
+  }
+
+  template<typename VV, typename GV>
+  inline void evaluate_vgl(const PointType& r, VV& psi, GV& dpsi, VV& d2psi)
+  {
     PointType ru(PrimLattice.toUnit_floor(r));
     SplineInst->evaluate_vgh(ru,myV,myG,myH);
     assign_vgl(r,psi,dpsi,d2psi);
   }
+
 
   /** identical to assign_vgl but the output container is SoA container
    */
@@ -542,11 +554,17 @@ struct SplineC2CSoA: public SplineAdoptorBase<ST,3>
   template<typename VGL>
   inline void evaluate_vgl_combo(const ParticleSet& P, const int iat, VGL& vgl)
   {
-    const PointType& r=P.R[iat];
+    evaluate_vgl_combo(P.R[iat], vgl);
+  }
+
+  template<typename VGL>
+  inline void evaluate_vgl_combo(const PointType &r, VGL& vgl)
+  {
     PointType ru(PrimLattice.toUnit_floor(r));
     SplineInst->evaluate_vgh(ru,myV,myG,myH);
     assign_vgl_soa(r,vgl);
   }
+
 
   template<typename VV, typename GV, typename GGV>
   void assign_vgh(const PointType& r, VV& psi, GV& dpsi, GGV& grad_grad_psi)
@@ -666,12 +684,18 @@ struct SplineC2CSoA: public SplineAdoptorBase<ST,3>
   template<typename VV, typename GV, typename GGV>
   void evaluate_vgh(const ParticleSet& P, const int iat, VV& psi, GV& dpsi, GGV& grad_grad_psi)
   {
-    const PointType& r=P.R[iat];
+    evaluate_vgh(P.R[iat], psi, dpsi, grad_grad_psi);
+  }
+
+  template<typename VV, typename GV, typename GGV>
+  void evaluate_vgh(const PointType& r, VV& psi, GV& dpsi, GGV& grad_grad_psi)
+  {
     PointType ru(PrimLattice.toUnit_floor(r));
     SplineInst->evaluate_vgh(ru,myV,myG,myH);
     assign_vgh(r,psi,dpsi,grad_grad_psi);
     //missing
   }
+
 };
 
 }
