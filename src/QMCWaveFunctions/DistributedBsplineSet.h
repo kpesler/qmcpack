@@ -157,9 +157,9 @@ class DistributedBsplineSet: public SPOSetBase, public SplineAdoptor
   int
   exchangeData(const ExchangeType& my_data)
   {
+// #pragma omp barrier
     int thread_num = omp_get_thread_num();
     int num_evals = 0;
-#pragma omp barrier
     if (!group_size) {
       group_size = SplineAdoptor::dist_group_comm->size();
       group_rank = SplineAdoptor::dist_group_comm->rank();
@@ -303,7 +303,7 @@ public:
   {
     int mythread = omp_get_thread_num();
 
-#pragma omp barrier
+    //#pragma omp barrier
 
     // Number of columns to send for NONE, V, VGL, and VGH, respectively
     int num_columns[] = { 0, 1, 5, 13 };
