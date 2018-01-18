@@ -36,6 +36,8 @@ namespace qmcplusplus
  * to make MultiBsplineSet (TBD) which has multiple SplineAdoptors for
  * distributed cases.
  */
+
+
 template<typename SplineAdoptor>
 class DistributedBsplineSet: public SPOSetBase, public SplineAdoptor
 {
@@ -157,7 +159,6 @@ class DistributedBsplineSet: public SPOSetBase, public SplineAdoptor
   int
   exchangeData(const ExchangeType& my_data)
   {
-// #pragma omp barrier
     int thread_num = omp_get_thread_num();
     int num_evals = 0;
     if (!group_size) {
@@ -212,14 +213,16 @@ class DistributedBsplineSet: public SPOSetBase, public SplineAdoptor
 #pragma omp master
     for (int rank=0; rank < group_size; ++rank) {
       if (rank != group_rank) {
-        size_t offset = SplineAdoptor::dist_spo_offsets[rank];
-        size_t size   = SplineAdoptor::dist_spo_offsets[rank+1] - offset;
+        if (recv_total) {
+          size_t offset = SplineAdoptor::dist_spo_offsets[rank];
+          size_t size   = SplineAdoptor::dist_spo_offsets[rank+1] - offset;
 
-        VectorViewer<value_type> recv_buff((*recv_values_ptr)[rank][0], 
-                                           recv_total*size);
+          VectorViewer<value_type> recv_buff((*recv_values_ptr)[rank][0], 
+                                             recv_total*size);
 
-        recv_requests[rank] = 
-          SplineAdoptor::dist_group_comm->irecv(rank, exchange_tag, recv_buff);
+          recv_requests[rank] = 
+            SplineAdoptor::dist_group_comm->irecv(rank, exchange_tag, recv_buff);
+        }
       }
     }
   }
@@ -325,8 +328,6 @@ public:
         
         typename ExchangeType::EvalQuantities quant = 
           (*exchange_data_ptr)[rank*max_threads+mythread].quantities;
-        // exchange_data[rank].quantities;
-        //          PointType pos = exchange_data[rank].position;
         PointType pos = (*exchange_data_ptr)[rank*max_threads+mythread].position;
 
         switch (quant) {
@@ -364,17 +365,19 @@ public:
         // Only master thread sends
 #pragma omp master
         {
-          VectorViewer<value_type> send_view =
-            VectorViewer<value_type>(
-              (*send_values_ptr)[max_threads*rank*max_values_per_orbital],
-              send_total*local_spos);
-          if (send_requests[rank] != nullptr) {
-            fprintf(stderr, "ERROR:  overwriting open send requests!\n");
-            abort();
-          }
+          if (send_total) {
+            VectorViewer<value_type> send_view =
+              VectorViewer<value_type>(
+                (*send_values_ptr)[max_threads*rank*max_values_per_orbital],
+                send_total*local_spos);
+            if (send_requests[rank] != nullptr) {
+              fprintf(stderr, "ERROR:  overwriting open send requests!\n");
+              abort();
+            }
 
-          send_requests[rank] = 
-            SplineAdoptor::dist_group_comm->isend(rank, exchange_tag, send_view);
+            send_requests[rank] = 
+              SplineAdoptor::dist_group_comm->isend(rank, exchange_tag, send_view);
+          }
         }
         // Synchronize with other threads
 #pragma omp barrier
