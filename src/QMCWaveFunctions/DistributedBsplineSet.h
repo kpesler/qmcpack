@@ -238,7 +238,7 @@ class DistributedBsplineSet: public SPOSetBase, public SplineAdoptor
           MPI_Status recv_wait_status;
           if (recv_requests[rank]) {
             MPI_Wait(&(recv_requests[rank]), &recv_wait_status);
-            recv_requests[rank] = nullptr;
+            recv_requests[rank] = 0;
           }
         }
       }
@@ -257,7 +257,7 @@ class DistributedBsplineSet: public SPOSetBase, public SplineAdoptor
           MPI_Status send_wait_status;
           if (send_requests[rank]) {
             MPI_Wait(&(send_requests[rank]), &send_wait_status);
-            send_requests[rank] = nullptr;
+            send_requests[rank] = 0;
           }
         }
       }
@@ -370,10 +370,6 @@ public:
               VectorViewer<value_type>(
                 (*send_values_ptr)[max_threads*rank*max_values_per_orbital],
                 send_total*local_spos);
-            if (send_requests[rank] != nullptr) {
-              fprintf(stderr, "ERROR:  overwriting open send requests!\n");
-              abort();
-            }
 
             send_requests[rank] = 
               SplineAdoptor::dist_group_comm->isend(rank, exchange_tag, send_view);
@@ -528,8 +524,8 @@ public:
       my_exchange_data_ptr->resize(max_threads);
       send_values_ptr->resize(total_size*max_values_per_orbital, num_local_spos);
       recv_values_ptr->resize(group_size);
-      send_requests.resize(group_size, nullptr);
-      recv_requests.resize(group_size, nullptr);
+      send_requests.resize(group_size, 0);
+      recv_requests.resize(group_size, 0);
       for (int rank=0; rank < group_size; ++rank) {
         if (rank != SplineAdoptor::dist_group_comm->rank()) {
           size_t num_orbs = SplineAdoptor::dist_spo_offsets[rank+1] -
