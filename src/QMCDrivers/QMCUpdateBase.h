@@ -210,6 +210,9 @@ public:
   virtual void
   advanceRemoteWalker(bool recompute)
   {
+    for(int ig=0; ig<W.groups(); ++ig) {
+      Psi.completeDistributedEvaluations(0, W.first(ig));
+    }
   }
 
   virtual RealType advanceWalkerForEE(Walker_t& w1, std::vector<PosType>& dR, std::vector<int>& iats, std::vector<int>& rs, std::vector<RealType>& ratios)

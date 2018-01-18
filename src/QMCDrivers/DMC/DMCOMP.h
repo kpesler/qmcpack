@@ -65,6 +65,10 @@ private:
   ///input to control maximum age allowed for walkers.
   IndexType mover_MaxAge;
 
+  /// If distributed orbitals are employed, returns the maximum number
+  /// of walkers over all threads of all nodes in the orbital group.
+  /// Otherwise, returns 0. 
+  int maxWalkersPerThread() const;
 
   void resetUpdateEngines();
   void benchMark();

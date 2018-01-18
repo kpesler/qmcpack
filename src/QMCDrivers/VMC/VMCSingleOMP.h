@@ -41,6 +41,11 @@ private:
   RealType logoffset,logepsilon;
   ///option to enable/disable drift equation or RN for VMC
   std::string UseDrift;
+
+  /// Returns the maximum number of walkers in any thread within the
+  /// distributed orbital group.
+  int maxWalkersPerThread() const;
+
   ///check the run-time environments
   void resetRun();
   ///copy constructor

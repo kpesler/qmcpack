@@ -56,6 +56,25 @@ VMCSingleOMP::VMCSingleOMP(MCWalkerConfiguration& w, TrialWaveFunction& psi, QMC
   prevStepsBetweenSamples=nStepsBetweenSamples;
 }
 
+int
+VMCSingleOMP::maxWalkersPerThread() const
+{
+  Communicate* dist_comm = Psi.getDistributedOrbitalComm();
+  if (dist_comm) {
+    int max_thread_walkers=0;
+    for (int i=0; i<(wPerNode.size()-1); ++i) {
+      int num_thread_walkers = wPerNode[i+1] - wPerNode[i];
+      max_thread_walkers = std::max(max_thread_walkers, num_thread_walkers);
+    }
+    dist_comm->allreducemax(max_thread_walkers);
+    return max_thread_walkers;
+  }
+  else {
+    return 0;
+  }
+}
+
+
 bool VMCSingleOMP::run()
 {
   resetRun();
@@ -72,12 +91,29 @@ bool VMCSingleOMP::run()
   bool enough_time_for_next_iteration = true;
 
   const bool has_collectables=W.Collectables.size();
+  // If we're using distributed orbitals, we need to account for
+  // walker imbalance.  Determine the maximum number of walkers
+  // over all threads and walkers in the oribital group.
+  int max_thread_walkers = maxWalkersPerThread();
+
+
+  // Communicate* dist_comm = Psi.getDistributedOrbitalComm();
+  // if (dist_comm) {
+  //   for (int i=0; i<(wPerNode.size()-1); ++i) {
+  //     int num_thread_walkers = wPerNode[ip+1] - wPerNode[ip];
+  //     max_thread_walkers = std::max(max_thread_walkers, num_thread_walkers);
+  //   }
+  //   dist_comm->allreducemax(max_thread_walkers);
+  // }
+
   for (int block=0; block<nBlocks; ++block)
   {
     vmc_loop.start();
     #pragma omp parallel
     {
       int ip=omp_get_thread_num();
+      int num_thread_walkers = wPerNode[ip+1] - wPerNode[ip];
+
       //IndexType updatePeriod=(QMCDriverMode[QMC_UPDATE_MODE])?Period4CheckProperties:(nBlocks+1)*nSteps;
       IndexType updatePeriod=(QMCDriverMode[QMC_UPDATE_MODE])?Period4CheckProperties:0;
       //assign the iterators and resuse them
@@ -92,6 +128,13 @@ bool VMCSingleOMP::run()
         wClones[ip]->resetCollectables();
         bool recompute=(nBlocksBetweenRecompute && (step+1) == nSteps && (1+block)%nBlocksBetweenRecompute == 0 && QMCDriverMode[QMC_UPDATE_MODE] );
         Movers[ip]->advanceWalkers(wit,wit_end,recompute);
+
+        // Call dummy routine to advance remote walkers
+        int my_num_walkers = wPerNode[ip+1] - wPerNode[ip];
+        for (int i=0; i < (max_thread_walkers - my_num_walkers); ++i) {
+          Movers[ip]->advanceRemoteWalker(false);
+        }
+
         if(has_collectables)
           wClones[ip]->Collectables *= cnorm;
         Movers[ip]->accumulate(wit,wit_end);

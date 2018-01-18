@@ -35,8 +35,6 @@ public:
 
   void advanceWalker(Walker_t& thisWalker, bool recompute);
 
-  void advanceRemoteWalker(bool recompute);
-
 private:
   TimerList_t myTimers;
 };

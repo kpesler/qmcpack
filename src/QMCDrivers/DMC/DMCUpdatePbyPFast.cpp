@@ -54,14 +54,6 @@ DMCUpdatePbyPWithRejectionFast::DMCUpdatePbyPWithRejectionFast(MCWalkerConfigura
 /// destructor
 DMCUpdatePbyPWithRejectionFast::~DMCUpdatePbyPWithRejectionFast() { }
 
-void
-DMCUpdatePbyPWithRejectionFast::advanceRemoteWalker(bool recompute)
-{
-  for(int ig=0; ig<W.groups(); ++ig) {
-    Psi.completeDistributedEvaluations(0, W.first(ig));
-  }
-}
-
 
 void DMCUpdatePbyPWithRejectionFast::advanceWalker(Walker_t& thisWalker, bool recompute)
 {

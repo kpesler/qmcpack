@@ -231,6 +231,25 @@ void DMCOMP::resetUpdateEngines()
   app_log() << "  DMC Engine Initialization = " << init_timer.elapsed() << " secs " << std::endl;
 }
 
+int
+DMCOMP::maxWalkersPerThread() const
+{
+  Communicate* dist_comm = Psi.getDistributedOrbitalComm();
+  if (dist_comm) {
+    int max_thread_walkers=0;
+    for (int i=0; i<(wPerNode.size()-1); ++i) {
+      int num_thread_walkers = wPerNode[i+1] - wPerNode[i];
+      max_thread_walkers = std::max(max_thread_walkers, num_thread_walkers);
+    }
+    dist_comm->allreducemax(max_thread_walkers);
+    return max_thread_walkers;
+  }
+  else {
+    return 0;
+  }
+}
+
+
 bool DMCOMP::run()
 {
 
@@ -272,6 +291,11 @@ bool DMCOMP::run()
       //           W.resetWalkerParents();
       //         }
      
+      // If we're using distributed orbitals, we need to account for
+      // walker imbalance.  Determine the maximum number of walkers
+      // over all threads and walkers in the oribital group.
+      int max_walkers = maxWalkersPerThread();
+      bool use_distributed_orbitals = Psi.getDistributedOrbitalComm()!=nullptr;
       #pragma omp parallel
       {
         int ip=omp_get_thread_num();
@@ -285,18 +309,44 @@ bool DMCOMP::run()
           Movers[ip]->advanceWalkers(wit,wit_end,false);
         wClones[ip]->resetCollectables();
         Movers[ip]->advanceWalkers(wit,wit_end,false);
+        // Call dummy routine to advance remote walkers
+        int my_num_walkers = wPerNode[ip+1] - wPerNode[ip];
+        for (int i=0; i < (max_walkers - my_num_walkers); ++i) {
+          Movers[ip]->advanceRemoteWalker(false);
+        }
+
         Movers[ip]->setMultiplicity(wit,wit_end);
-        if(QMCDriverMode[QMC_UPDATE_MODE] && now%updatePeriod == 0)
+        if(QMCDriverMode[QMC_UPDATE_MODE] && now%updatePeriod == 0) 
           Movers[ip]->updateWalkers(wit, wit_end);
 #endif
         wClones[ip]->resetCollectables();
         const size_t nw=W.getActiveWalkers();
+        // Here, we use a static partitioning over threads, so we know
+        // how many walkers each thread has advanced.  This is
+        // necessary to keep all threads in lock-step. 
+        
+        if (use_distributed_orbitals) {
+          for (int iw=wPerNode[ip]; iw < wPerNode[ip+1]; ++iw) {
+            Walker_t& thisWalker(*W[iw]);
+            Movers[ip]->advanceWalker(thisWalker,recompute);
+          }
+
+          // Call dummy routine to advance remote walkers
+          int my_num_walkers = wPerNode[ip+1] - wPerNode[ip];
+          // A call to DMCUpdatePbyP makes two passes through the
+          // electron species:  first to advance all the walkers, and
+          // the second to compute the NonlocalECPotential. 
+          int num_remote_updates = 2 * (max_walkers - my_num_walkers);
+          for (int iw=0; iw < num_remote_updates; ++iw) {
+            Movers[ip]->advanceRemoteWalker(recompute);
+          }
+        }
+        else {
 #pragma omp for nowait
-        for(size_t iw=0;iw<nw; ++iw)
-        {
-          Walker_t& thisWalker(*W[iw]);
-          Movers[ip]->advanceWalker(thisWalker,recompute);
-          //Movers[ip]->setMultiplicity(thisWalker);
+          for(size_t iw=0;iw<nw; ++iw) {
+            Walker_t& thisWalker(*W[iw]);
+            Movers[ip]->advanceWalker(thisWalker,recompute);
+          }
         }
       }
 
