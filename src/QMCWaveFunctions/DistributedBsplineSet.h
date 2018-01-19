@@ -6,6 +6,9 @@
 #include <memory>
 #include <omp.h>
 
+
+//#define SEPARATE_WAITS
+
 namespace qmcplusplus
 {
 
@@ -47,6 +50,8 @@ class DistributedBsplineSet: public SPOSetBase, public SplineAdoptor
   typedef GradMatrix_t::value_type grad_type;
   typedef HessMatrix_t::value_type hess_type;
 
+  std::vector<Communicate::request> requests;
+  std::vector<Communicate::status>  statuses;
   std::vector<Communicate::request> send_requests;
   std::vector<Communicate::request> recv_requests;
   const int exchange_tag = 27183;
@@ -219,12 +224,31 @@ class DistributedBsplineSet: public SPOSetBase, public SplineAdoptor
 
           VectorViewer<value_type> recv_buff((*recv_values_ptr)[rank][0], 
                                              recv_total*size);
-
+#ifdef SEPARATE_WAITS
           recv_requests[rank] = 
             SplineAdoptor::dist_group_comm->irecv(rank, exchange_tag, recv_buff);
+#else
+          requests.push_back(
+            SplineAdoptor::dist_group_comm->irecv(rank, exchange_tag, recv_buff));
+#endif
         }
       }
     }
+  }
+
+  void
+  waitOnTransfers()
+  {
+#pragma omp master
+    {
+      int num_requests = requests.size();
+      if (statuses.size() != requests.size()) {
+        statuses.resize(requests.size());
+      }
+      MPI_Waitall(num_requests, &(requests[0]), &(statuses[0]));
+      requests.clear();
+    }
+#pragma omp barrier
   }
 
 
@@ -370,9 +394,15 @@ public:
               VectorViewer<value_type>(
                 (*send_values_ptr)[max_threads*rank*max_values_per_orbital],
                 send_total*local_spos);
-
+            
+#ifdef SEPARATE_WAITS
             send_requests[rank] = 
               SplineAdoptor::dist_group_comm->isend(rank, exchange_tag, send_view);
+#else
+            requests.push_back(
+              SplineAdoptor::dist_group_comm->isend(rank, exchange_tag, send_view));
+#endif
+
           }
         }
         // Synchronize with other threads
@@ -400,7 +430,11 @@ public:
     VectorViewer<value_type> v(&(psi[offset]),local_spos);
     SplineAdoptor::evaluate_v(groupPosition(group_rank), v);
 
+#ifdef SEPARATE_WAITS
     waitOnReceives();
+#else
+    waitOnTransfers();
+#endif
     
     // Copy received values into the right place
     for (int rank=0; rank < group_size; ++rank) {
@@ -411,7 +445,9 @@ public:
         simd::copy(&(psi[offset]), &(recv[0]), size);
       }
     }
+#ifdef SEPARATE_WAITS
     waitOnSends();
+#endif
   }
 
   inline void evaluateValues(const ParticleSet& P, ValueMatrix_t& psiM)
@@ -442,7 +478,11 @@ public:
     VectorViewer<value_type> l(&(d2psi[offset]),local_spos);
     SplineAdoptor::evaluate_vgl(groupPosition(group_rank), v, g, l);
 
+#ifdef SEPARATE_WAITS
     waitOnReceives();
+#else
+    waitOnTransfers();
+#endif
 
     // Now copy received data to psi, dpsi, and d2psi
     for (int rank=0; rank < group_size; ++rank) {
@@ -458,7 +498,9 @@ public:
       }
     }    
     
+#ifdef SEPARATE_WAITS
     waitOnSends();
+#endif
   }
 
   int num_VGH_calls=0;
@@ -480,7 +522,11 @@ public:
     SplineAdoptor::evaluate_vgh(groupPosition(group_rank), v, g, h);
 
     // Wait for all receives to complete
+#ifdef SEPARATE_WAITS
     waitOnReceives();
+#else
+    waitOnTransfers();
+#endif
 
     // Now copy received data to psi, dpsi, and d2psi
     for (int rank=0; rank < group_size; ++rank) {
@@ -496,7 +542,9 @@ public:
       }
     }    
     
+#ifdef SEPARATE_WAITS
     waitOnSends();
+#endif
   }
 
   void resetParameters(const opt_variables_type& active)
@@ -608,8 +656,12 @@ public:
       num_evals = exchangeData(exch);
       postRemoteReceives(recv_offset);
       evaluateForRemote();
+#ifdef SEPARATE_WAITS
       waitOnReceives();
       waitOnSends();
+#else
+      waitOnTransfers();
+#endif
     } while (num_evals);
   }
 
