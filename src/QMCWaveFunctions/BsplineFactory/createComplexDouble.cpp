@@ -34,7 +34,7 @@ namespace qmcplusplus
 
   BsplineReaderBase* 
   createBsplineComplexDouble(EinsplineSetBuilder* e, 
-                             bool hybrid_rep, bool distributed)
+                             bool hybrid_rep, int dist_group_size)
   {
     typedef OHMMS_PRECISION RealType;
     BsplineReaderBase* aReader=nullptr;
@@ -45,15 +45,19 @@ namespace qmcplusplus
     if(hybrid_rep) {
       aReader= new SplineHybridAdoptorReader<HybridCplxSoA<SplineC2CSoA<double,RealType> > >(e);
     }
-    else if (distributed) {
-      aReader= new SplineAdoptorReader<SplineC2CSoA<double,RealType>,true >(e);
+    else if (dist_group_size != 1) {
+      auto reader= new SplineAdoptorReader<SplineC2CSoA<double,RealType>,true >(e);
+      reader->dist_group_size = dist_group_size;      
+      aReader = reader;
     }
     else {
       aReader= new SplineAdoptorReader<SplineC2CSoA<double,RealType>,false >(e);
     }
   #else
     if (distributed) {
-      aReader= new SplineAdoptorReader<SplineC2CPackedAdoptor<double,RealType,3>,true >(e);
+      auto reader= new SplineAdoptorReader<SplineC2CPackedAdoptor<double,RealType,3>,true >(e);
+      reader->dist_group_size = dist_group_size;
+      aReader = reader;
     }
     else {
       aReader= new SplineAdoptorReader<SplineC2CPackedAdoptor<double,RealType,3>,false >(e);
@@ -65,15 +69,19 @@ namespace qmcplusplus
     if(hybrid_rep) {
       aReader= new SplineHybridAdoptorReader<HybridCplxSoA<SplineC2RSoA<double,RealType> > >(e);
     }
-    else if (distributed) {
-      aReader= new SplineAdoptorReader<SplineC2RSoA<double,RealType>,true >(e);
+    else if (dist_group_size != 1) {
+      auto reader = new SplineAdoptorReader<SplineC2RSoA<double,RealType>,true >(e);
+      reader->dist_group_size = dist_group_size;
+      aReader = reader;
     }
     else {
       aReader= new SplineAdoptorReader<SplineC2RSoA<double,RealType>,false >(e);
     }
 #else 
-    if (distributed) {
-      aReader= new SplineAdoptorReader<SplineC2RPackedAdoptor<double,RealType,3>,true >(e);
+    if (dist_group_size != 1) {
+      auto reader = new SplineAdoptorReader<SplineC2RPackedAdoptor<double,RealType,3>,true >(e);
+      reader->dist_group_size = dist_group_size;
+      aReader = reader;
     }
     else {
       aReader= new SplineAdoptorReader<SplineC2RPackedAdoptor<double,RealType,3>,false >(e);

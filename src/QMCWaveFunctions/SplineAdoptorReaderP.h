@@ -69,6 +69,9 @@ struct SplineAdoptorReader: public BsplineReaderBase
   std::vector<int> OrbGroups;
   fftw_plan FFTplan;
 
+  /// Number of nodes in each distributed orbital group
+  int dist_group_size = 1;
+
   SplineAdoptorReader(EinsplineSetBuilder* e)
     : BsplineReaderBase(e), bspline(0),FFTplan(NULL)
   {}
@@ -173,11 +176,16 @@ struct SplineAdoptorReader: public BsplineReaderBase
       app_log() << "  Can use SoA implementation for mGL" << std::endl;
 
     if (DISTRIBUTED) {
-      // HACK HACK HACK:  for now, divide spline set across all ranks
-      int num_spline_groups = 1;
+      int total_nodes = myComm->size();
+      if ((total_nodes % dist_group_size) != 0) {
+        APP_ABORT("The number of MPI ranks should be a multiple of distgroupsize.");
+      }
+      int num_spline_groups = total_nodes / dist_group_size;
       bspline->dist_group_comm = new Communicate(*myComm, num_spline_groups);
     }
       
+    auto comm = bspline->dist_group_comm ? bspline->dist_group_comm : myComm;
+    
 
     //baseclass handles twists
     check_twists(bspline,bandgroup);
@@ -196,13 +204,13 @@ struct SplineAdoptorReader: public BsplineReaderBase
     oo<<bandgroup.myName << ".g"<<MeshSize[0]<<"x"<<MeshSize[1]<<"x"<<MeshSize[2]<<".h5";
     std::string splinefile= oo.str(); //bandgroup.myName+".h5";
     //=make_spline_filename(mybuilder->H5FileName,mybuilder->TileMatrix,spin,TwistNum,bandgroup.GroupID,MeshSize);
-    bool root=(myComm->rank() == 0);
+    bool root=(comm->rank() == 0);
     int foundspline=0;
     Timer now;
     if(root)
     {
       now.restart();
-      hdf_archive h5f(myComm);
+      hdf_archive h5f(comm);
       foundspline=h5f.open(splinefile,H5F_ACC_RDONLY);
       if(foundspline)
       {
@@ -222,12 +230,12 @@ struct SplineAdoptorReader: public BsplineReaderBase
         if(foundspline) app_log() << "  Time to read the table in " << splinefile << " = " << now.elapsed() << std::endl;
       }
     }
-    myComm->bcast(foundspline);
+    comm->bcast(foundspline);
     if(foundspline)
     {
       app_log() << "Use existing bspline tables in " << splinefile << std::endl;
       now.restart();
-      chunked_bcast(myComm, bspline->MultiSpline);
+      chunked_bcast(comm, bspline->MultiSpline);
       app_log() << "  SplineAdoptorReader bcast the full table " << now.elapsed() << " sec" << std::endl;
       app_log().flush();
     }
@@ -247,12 +255,12 @@ struct SplineAdoptorReader: public BsplineReaderBase
         splineData_r.resize(nx,ny,nz);
         if(bspline->is_complex) splineData_i.resize(nx,ny,nz);
 
-        bool usingSerialIO=(myComm->size()==1);
+        bool usingSerialIO=(comm->size()==1);
 
-        int np=std::min(N,myComm->size());
+        int np=std::min(N,comm->size());
         OrbGroups.resize(np+1,0);
         FairDivideLow(N,np,OrbGroups);
-        int ip=myComm->rank();
+        int ip=comm->rank();
         int norbs_n=(ip<np)?OrbGroups[ip+1]-OrbGroups[ip]:0;
         if(usingSerialIO)  norbs_n=0;
 

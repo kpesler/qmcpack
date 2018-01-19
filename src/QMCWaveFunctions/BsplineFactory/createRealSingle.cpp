@@ -28,22 +28,26 @@ namespace qmcplusplus
 
   BsplineReaderBase* 
   createBsplineRealSingle(EinsplineSetBuilder* e, 
-                          bool hybrid_rep, bool distributed)
+                          bool hybrid_rep, int dist_group_size)
   {
     BsplineReaderBase* aReader=nullptr;
 
 #if defined(QMC_ENABLE_SOA_DET)
     if(hybrid_rep)
       aReader= new SplineHybridAdoptorReader<HybridRealSoA<SplineR2RSoA<float,OHMMS_PRECISION> > >(e);
-    else if (distributed) {
-      aReader= new SplineAdoptorReader<SplineR2RSoA<float,OHMMS_PRECISION>,true >(e);
+    else if (dist_group_size) {
+      auto reader = new SplineAdoptorReader<SplineR2RSoA<float,OHMMS_PRECISION>,true >(e);
+      reader->dist_group_size = dist_group_size;
+      aReader= reader;
     }
     else {
       aReader= new SplineAdoptorReader<SplineR2RSoA<float,OHMMS_PRECISION>,false >(e);
     }
 #else
-    if (distributed) {
-      aReader= new SplineAdoptorReader<SplineR2RAdoptor<float,OHMMS_PRECISION,3>,true >(e);
+    if (dist_group_size != 1) {
+      auto reader= new SplineAdoptorReader<SplineR2RAdoptor<float,OHMMS_PRECISION,3>,true >(e);
+      reader->dist_group_size = dist_group_size;
+      aReader = reader;
     }
     else {
       aReader= new SplineAdoptorReader<SplineR2RAdoptor<float,OHMMS_PRECISION,3>,false >(e);

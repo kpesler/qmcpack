@@ -39,16 +39,16 @@ namespace qmcplusplus
 
   ///create R2R, real wavefunction in double
   BsplineReaderBase* createBsplineRealDouble(
-    EinsplineSetBuilder* e, bool hybrid_rep, bool distributed);
+    EinsplineSetBuilder* e, bool hybrid_rep, int distributed_group_size);
   ///create R2R, real wavefunction in float
   BsplineReaderBase* createBsplineRealSingle(
-    EinsplineSetBuilder* e, bool hybrid_rep, bool distributed);
+    EinsplineSetBuilder* e, bool hybrid_rep, int distributed_group_size);
   ///create C2C or C2R, complex wavefunction in double
   BsplineReaderBase* createBsplineComplexDouble(
-    EinsplineSetBuilder* e, bool hybrid_rep, bool distributed);
+    EinsplineSetBuilder* e, bool hybrid_rep, int distributed_group_size);
   ///create C2C or C2R, complex wavefunction in single
   BsplineReaderBase* createBsplineComplexSingle(
-    EinsplineSetBuilder* e, bool hybrid_rep, bool distributed);
+    EinsplineSetBuilder* e, bool hybrid_rep, int distributed_group_size);
 
   ///disable truncated orbitals for now
   BsplineReaderBase* createTruncatedSingle(EinsplineSetBuilder* e, int celltype)
@@ -142,7 +142,7 @@ EinsplineSetBuilder::createSPOSetFromXML(xmlNodePtr cur)
   int sortBands(1);
   int spinSet = 0;
   int TwistNum_inp=0;
-  int distributedGroupSize=1;
+  int dist_group_size=1;
 
   std::string sourceName;
   std::string spo_prec("double");
@@ -174,7 +174,7 @@ EinsplineSetBuilder::createSPOSetFromXML(xmlNodePtr cur)
     a.add (spo_prec,   "precision");
     a.add (truncate,   "truncate");
     a.add (BufferLayer, "buffer");
-    a.add (distributedGroupSize, "distgroup");
+    a.add (dist_group_size, "distgroupsize");
     a.add (use_einspline_set_extended,"use_old_spline");
     a.add (myName, "tag");
 #if defined(QMC_CUDA)
@@ -324,7 +324,6 @@ EinsplineSetBuilder::createSPOSetFromXML(xmlNodePtr cur)
   if(spinSet==0) TileIons();
 
   bool use_single= (spo_prec == "single" || spo_prec == "float");
-  bool distributed = distributedGroupSize != 1;
 
 #if !defined(QMC_COMPLEX)
   if (UseRealOrbitals)
@@ -342,9 +341,9 @@ EinsplineSetBuilder::createSPOSetFromXML(xmlNodePtr cur)
       else
       {
         if(use_single)
-          MixedSplineReader = createBsplineRealSingle(this, hybrid_rep=="yes", distributed);
+          MixedSplineReader = createBsplineRealSingle(this, hybrid_rep=="yes", dist_group_size);
         else
-          MixedSplineReader = createBsplineRealDouble(this, hybrid_rep=="yes", distributed);
+          MixedSplineReader = createBsplineRealDouble(this, hybrid_rep=="yes", dist_group_size);
       }
     }
   }
@@ -358,9 +357,9 @@ EinsplineSetBuilder::createSPOSetFromXML(xmlNodePtr cur)
         app_log() << "  Truncated orbitals with multiple kpoints are not supported yet!" << std::endl;
       }
       if(use_single)
-        MixedSplineReader= createBsplineComplexSingle(this, hybrid_rep=="yes", distributed);
+        MixedSplineReader= createBsplineComplexSingle(this, hybrid_rep=="yes", dist_group_size);
       else
-        MixedSplineReader= createBsplineComplexDouble(this, hybrid_rep=="yes", distributed);
+        MixedSplineReader= createBsplineComplexDouble(this, hybrid_rep=="yes", dist_group_size);
     }
   }
 
