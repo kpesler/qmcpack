@@ -187,36 +187,48 @@ void DMCUpdatePbyPWithRejectionFast::advanceWalker(Walker_t& thisWalker, bool re
 #if !defined(REMOVE_TRACEMANAGER)
   Traces->buffer_sample(W.current_step);
 #endif
-  if(UseTMove)
-  {
+  if(UseTMove) {
     myTimers[DMC_tmoves]->start();
     int ibar = nonLocalOps.selectMove(RandomGen());
     //make a non-local move
-    if(ibar)
-    {
-      int iat=nonLocalOps.id(ibar);
+
+    // Loop over groups, so that
+    for(int ig=0; ig<W.groups(); ++ig) {
+      int first = W.first(ig), last=W.last(ig);
+      bool called_ratio_for_group=false;
+      if(ibar)  {
+        int iat=nonLocalOps.id(ibar);
+        if (iat >= first && iat < last) {
 #ifdef ENABLE_SOA
-      W.setActive(iat);
+          W.setActive(iat);
 #endif
-      if(W.makeMoveAndCheck(iat,nonLocalOps.delta(ibar)))
-      {
-        GradType grad_iat;
-        Psi.ratioGrad(W,iat,grad_iat);
-        Psi.acceptMove(W,iat);
+          if(W.makeMoveAndCheck(iat,nonLocalOps.delta(ibar)))  {
+            called_ratio_for_group = true;
+            GradType grad_iat;
+            Psi.ratioGrad(W,iat,grad_iat);
+            Psi.acceptMove(W,iat);
 #ifndef ENABLE_SOA
-        W.acceptMove(iat);
+            W.acceptMove(iat);
 #endif
-        RealType logpsi = Psi.updateBuffer(W,w_buffer,false);
-        // debugging lines
-        //W.update(true);
-        //RealType logpsi2 = Psi.evaluateLog(W);
-        //if(logpsi!=logpsi2) std::cout << " logpsi " << logpsi << " logps2i " << logpsi2 << " diff " << logpsi2-logpsi << std::endl;
-        W.saveWalker(thisWalker);
-        ++NonLocalMoveAccepted;
+            RealType logpsi = Psi.updateBuffer(W,w_buffer,false);
+            // debugging lines
+            //W.update(true);
+            //RealType logpsi2 = Psi.evaluateLog(W);
+            //if(logpsi!=logpsi2) std::cout << " logpsi " << logpsi << " logps2i " 
+            //  << logpsi2 << " diff " << logpsi2-logpsi << std::endl;
+            W.saveWalker(thisWalker);
+            ++NonLocalMoveAccepted;
+          }
+        }
       }
-    }
+      if (true || !called_ratio_for_group) {
+        // Make sure we catch up remote nodes in our orbital group
+        Psi.completeDistributedEvaluations(0, first);
+      }
+    }    
     myTimers[DMC_tmoves]->stop();
   }
+
   //2008-06-26: select any
   //bare green function by setting nodecorr=nodecorr_old=1.0
   //2011-11-15 JNKIM COLLECTABLE FIX

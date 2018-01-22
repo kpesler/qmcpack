@@ -185,7 +185,8 @@ NonLocalECPotential::evaluate(ParticleSet& P)
           int first = P.first(ig), last=P.last(ig);
           for(int iat=0; iat<NumIons; iat++) {
             if(PP[iat]==nullptr) continue;
-            //          PP[iat]->randomize_grid(*(P.Sphere[iat]),UpdateMode[PRIMARY]);
+            // Copy the sphere stored in *P.Sphere[iat] back to PP[iat]
+            PP[iat]->randomize_grid(*(P.Sphere[iat]),false);
             const int* restrict J=myTable->J2[iat];
             const RealType* restrict dist=myTable->r_m2[iat];
             const PosType* restrict displ=myTable->dr_m2[iat];
@@ -219,6 +220,9 @@ NonLocalECPotential::evaluate(ParticleSet& P)
         // Psi.completeDistributedEvaluations after completing each
         // electron group.  For this reason, the electrons have to be
         // the outer loop in this case, and the ions the inner loop.
+
+        // Rotate the quadrature grid for all ions first, storing
+        // result in P.Sphere[iat]
         for(int iat=0; iat<NumIons; iat++) {
           if(PP[iat]==nullptr) continue;
           PP[iat]->randomize_grid(*(P.Sphere[iat]),UpdateMode[PRIMARY]);
@@ -231,6 +235,8 @@ NonLocalECPotential::evaluate(ParticleSet& P)
               if(PP[iat]==nullptr) continue;
               const RealType r(myTable->r(nn));
               if(r>PP[iat]->Rmax) continue;
+              // Copy the sphere stored in *P.Sphere[iat] back to PP[iat]
+              PP[iat]->randomize_grid(*(P.Sphere[iat]),false);
               Value += PP[iat]->evaluateOne(P,iat,Psi,iel,r,myTable->dr(nn),false,Txy);
             }
           }
@@ -269,6 +275,8 @@ NonLocalECPotential::Return_t
 NonLocalECPotential::evaluate(ParticleSet& P, std::vector<NonLocalData>& Txy)
 {
   Value=0.0;
+  bool use_distributed_orbitals = Psi.getDistributedOrbitalComm() != 0;
+
 
 #if !defined(REMOVE_TRACEMANAGER)
   if( streaming_particles)
@@ -290,62 +298,92 @@ NonLocalECPotential::evaluate(ParticleSet& P, std::vector<NonLocalData>& Txy)
   else
   {
     const DistanceTableData* myTable = P.DistTables[myTableIndex];
-    if(myTable->DTType == DT_SOA)
-    {
-      for(int iat=0; iat<NumIons; iat++)
-      {
-        if(PP[iat]==nullptr) continue;
-        PP[iat]->randomize_grid(*(P.Sphere[iat]),UpdateMode[PRIMARY]);
-        const int* restrict J=myTable->J2[iat];
-        const RealType* restrict dist=myTable->r_m2[iat];
-        const PosType* restrict displ=myTable->dr_m2[iat];
-        for(size_t nj=0; nj<myTable->M[iat]; ++nj)
-        {
-          if(dist[nj]<PP[iat]->Rmax)
-            Value += PP[iat]->evaluateOne(P,iat,Psi,J[nj],dist[nj],displ[nj],true,Txy);
-        }
-      }
-    }
-    else
-    {
-#ifdef ION_OUTER_LOOP
-      for(int iat=0; iat<NumIons; iat++)
-      {
-        if(PP[iat]==nullptr) continue;
-        PP[iat]->randomize_grid(*(P.Sphere[iat]),UpdateMode[PRIMARY]);
-        for(int nn=myTable->M[iat],iel=0; nn<myTable->M[iat+1]; nn++,iel++)
-        {
-          const RealType r(myTable->r(nn));
-          if(r>PP[iat]->Rmax) continue;
-          Value += PP[iat]->evaluateOne(P,iat,Psi,iel,r,myTable->dr(nn),true,Txy);
-        }
-      }
-#else
-      // Distributed orbital evaluations requires that we keep all
-      // ranks in lock-step.  This requires calling
-      // Psi.completeDistributedEvaluations after completing each
-      // electron group.  For this reason, the electrons have to be
-      // the outer loop in this case, and the ions the inner loop.
-      for(int iat=0; iat<NumIons; iat++) {
-        if(PP[iat]==nullptr) continue;
-        PP[iat]->randomize_grid(*(P.Sphere[iat]),UpdateMode[PRIMARY]);
-      }
-      
-      for(int ig=0; ig<P.groups(); ++ig) {
-        for (int iel=P.first(ig); iel<P.last(ig); ++iel) {
-          for (int iat=0, nn=iel; iat<NumIons; iat++, nn+=myTable->targets()) {
-            // int nn = myTable->M[iat] + iel;
-            if(PP[iat]==nullptr) continue;
-            const RealType r(myTable->r(nn));
-            if(r>PP[iat]->Rmax) continue;
-            Value += PP[iat]->evaluateOne(P,iat,Psi,iel,r,myTable->dr(nn),false,Txy);
+    if(myTable->DTType == DT_SOA) {
+      if (!use_distributed_orbitals) {
+        for(int iat=0; iat<NumIons; iat++) {
+          if(PP[iat]==nullptr) continue;
+          PP[iat]->randomize_grid(*(P.Sphere[iat]),UpdateMode[PRIMARY]);
+          const int* restrict J=myTable->J2[iat];
+          const RealType* restrict dist=myTable->r_m2[iat];
+          const PosType* restrict displ=myTable->dr_m2[iat];
+          for(size_t nj=0; nj<myTable->M[iat]; ++nj) {
+            if(dist[nj]<PP[iat]->Rmax) {
+              Value += PP[iat]->evaluateOne(P,iat,Psi,J[nj],dist[nj],displ[nj],true,Txy);
+            }
           }
         }
-        Psi.completeDistributedEvaluations(0, P.first(ig));
       }
-#endif
+      else {
 
-
+        // Distributed orbital evaluations requires that we keep all
+        // ranks in lock-step.  This requires calling
+        // Psi.completeDistributedEvaluations after completing each
+        // electron group.  For this reason, the electrons have to be
+        // the outer loop in this case, and the ions the inner loop.
+        for(int iat=0; iat<NumIons; iat++) {
+          if(PP[iat]==nullptr) continue;
+          PP[iat]->randomize_grid(*(P.Sphere[iat]),UpdateMode[PRIMARY]);
+        }
+      
+        for(int ig=0; ig<P.groups(); ++ig) {
+          int first = P.first(ig), last=P.last(ig);
+          for(int iat=0; iat<NumIons; iat++) {
+            if(PP[iat]==nullptr) continue;
+            // Copy the sphere stored in *P.Sphere[iat] back to PP[iat]
+            PP[iat]->randomize_grid(*(P.Sphere[iat]),false);
+            const int* restrict J=myTable->J2[iat];
+            const RealType* restrict dist=myTable->r_m2[iat];
+            const PosType* restrict displ=myTable->dr_m2[iat];
+            for(size_t nj=0; nj<myTable->M[iat]; ++nj) {
+              int j = J[nj];
+              if (j >= first && j < last) {
+                if(dist[nj]<PP[iat]->Rmax)
+                  Value += PP[iat]->evaluateOne(P,iat,Psi,J[nj],dist[nj],displ[nj],true,Txy);
+              }
+            }
+          }
+          Psi.completeDistributedEvaluations(0, P.first(ig));
+        }   
+      }
+    }
+    else {
+      if (!use_distributed_orbitals) {
+        for(int iat=0; iat<NumIons; iat++) {
+          if(PP[iat]==nullptr) continue;
+          PP[iat]->randomize_grid(*(P.Sphere[iat]),UpdateMode[PRIMARY]);
+          for(int nn=myTable->M[iat],iel=0; nn<myTable->M[iat+1]; nn++,iel++) {
+            const RealType r(myTable->r(nn));
+            if(r>PP[iat]->Rmax) continue;
+            Value += PP[iat]->evaluateOne(P,iat,Psi,iel,r,myTable->dr(nn),true,Txy);
+          }
+        }
+      }
+      else {
+        // Distributed orbital evaluations requires that we keep all
+        // ranks in lock-step.  This requires calling
+        // Psi.completeDistributedEvaluations after completing each
+        // electron group.  For this reason, the electrons have to be
+        // the outer loop in this case, and the ions the inner loop.
+        for(int iat=0; iat<NumIons; iat++) {
+          if(PP[iat]==nullptr) continue;
+          PP[iat]->randomize_grid(*(P.Sphere[iat]),UpdateMode[PRIMARY]);
+        }
+      
+        for(int ig=0; ig<P.groups(); ++ig) {
+          for (int iel=P.first(ig); iel<P.last(ig); ++iel) {
+            for (int iat=0, nn=iel; iat<NumIons; iat++, nn+=myTable->targets()) {
+              // int nn = myTable->M[iat] + iel;
+              if(PP[iat]==nullptr) continue;
+              const RealType r(myTable->r(nn));
+              if(r>PP[iat]->Rmax) continue;
+              // Copy the sphere stored in *P.Sphere[iat] back to PP[iat]
+              PP[iat]->randomize_grid(*(P.Sphere[iat]),false);
+              Value += PP[iat]->evaluateOne(P,iat,Psi,iel,r,myTable->dr(nn),true,Txy);
+            }
+          }
+          Psi.completeDistributedEvaluations(0, P.first(ig));
+        }
+      }
     }
   }
 #if defined(TRACE_CHECK)

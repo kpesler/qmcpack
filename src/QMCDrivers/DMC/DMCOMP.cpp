@@ -335,8 +335,12 @@ bool DMCOMP::run()
           int my_num_walkers = wPerNode[ip+1] - wPerNode[ip];
           // A call to DMCUpdatePbyP makes two passes through the
           // electron species:  first to advance all the walkers, and
-          // the second to compute the NonlocalECPotential. 
-          int num_remote_updates = 2 * (max_walkers - my_num_walkers);
+          // the second to compute the NonlocalECPotential. If we're
+          // using T-moves, we need a third pass for the final Tmove
+          // ratio. 
+          int updates_per_walker = 2 + Movers[ip]->usingTMoves();
+          int num_remote_updates = 
+            updates_per_walker * (max_walkers - my_num_walkers);
           for (int iw=0; iw < num_remote_updates; ++iw) {
             Movers[ip]->advanceRemoteWalker(recompute);
           }

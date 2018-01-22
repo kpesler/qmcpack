@@ -262,6 +262,12 @@ public:
     return -logGb;
   }
 
+  inline bool
+  usingTMoves() const
+  {
+    return UseTMove;
+  }
+
 public:
   ///traces
   TraceManager* Traces;
