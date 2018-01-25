@@ -12,6 +12,10 @@
 namespace qmcplusplus
 {
 
+  /** A simple data structure for storing both particle positions and
+   *  the quantities that need to be cooperatively computed for a
+   *  given walker.
+   */
   template<typename PointType>
   struct BsplineExchangeData
   {
@@ -29,18 +33,16 @@ namespace qmcplusplus
   };
 
 /** DistributedBsplineSet<SplineAdoptor>, a SPOSetBase
- * @tparam SplineAdoptor implements evaluation functions that matched
- * the storage requirements. 
- *
- * Equivalent to EinsplineSetExtended<Storage>
- * Storage is now handled by SplineAdoptor class that is specialized
- * for precision, storage etc. 
- * @todo Make SplineAdoptor be a member not the base class. This is needed
- * to make MultiBsplineSet (TBD) which has multiple SplineAdoptors for
- * distributed cases.
+ *  @tparam SplineAdoptor implements evaluation functions that match
+ *  the storage requirements. 
+ *  This class implements a B-spline based SPOSet that utilizes MPI
+ *  communication to allow the distribution of the large B-spline
+ *  coefficient dataset between multiple nodes.  The dataset is split
+ *  along the orbital index.  Tight coordination among members of each
+ *  orbital group is required, as particle positions are exchanged and
+ *  orbitals are evaluated by the node holding the coefficients for
+ *  that orbital on behalf of remote nodes. 
  */
-
-
 template<typename SplineAdoptor>
 class DistributedBsplineSet: public SPOSetBase, public SplineAdoptor
 {
@@ -609,8 +611,8 @@ public:
       simd::copy(&(v[0]), &(  psi[0]), OrbitalSetSize);
       simd::copy(&(g[0]), &( dpsi[0]), OrbitalSetSize);
       simd::copy(&(l[0]), &(d2psi[0]), OrbitalSetSize);
-      //      SplineAdoptor::evaluate_vgl(P.R[iat],v,g,l);
     }
+    completeDistributedEvaluations(0);
   }
 
   virtual void 
@@ -636,6 +638,7 @@ public:
       simd::copy(&(g[0]), &( dpsi[0]), OrbitalSetSize);
       simd::copy(&(h[0]), &(d2psi[0]), OrbitalSetSize);
     }
+    completeDistributedEvaluations(0);
   }
 
   /** einspline does not need any other state data */
