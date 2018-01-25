@@ -612,7 +612,7 @@ public:
       simd::copy(&(g[0]), &( dpsi[0]), OrbitalSetSize);
       simd::copy(&(l[0]), &(d2psi[0]), OrbitalSetSize);
     }
-    completeDistributedEvaluations(0);
+    completeDistributedEvaluations();
   }
 
   virtual void 
@@ -638,7 +638,7 @@ public:
       simd::copy(&(g[0]), &( dpsi[0]), OrbitalSetSize);
       simd::copy(&(h[0]), &(d2psi[0]), OrbitalSetSize);
     }
-    completeDistributedEvaluations(0);
+    completeDistributedEvaluations();
   }
 
   /** einspline does not need any other state data */
@@ -650,7 +650,7 @@ public:
   }
 
   virtual void
-  completeDistributedEvaluations(int generation) override
+  completeDistributedEvaluations() override
   {
     ExchangeType exch(PointType(),ExchangeType::EvalQuantities::NONE);
     int num_evals=0;

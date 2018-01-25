@@ -832,11 +832,10 @@ void TrialWaveFunction::get_ratios(ParticleSet& P, std::vector<ValueType>& ratio
 
 
 void 
-TrialWaveFunction::completeDistributedEvaluations(int generation,
-                                                  int iat_in_group)
+TrialWaveFunction::completeDistributedEvaluations(int iat_in_group)
 {
   for (auto& z : Z) {
-    z->completeDistributedEvaluations(generation, iat_in_group);
+    z->completeDistributedEvaluations(iat_in_group);
   }
 }
 

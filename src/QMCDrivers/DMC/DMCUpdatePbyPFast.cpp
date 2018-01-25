@@ -137,7 +137,7 @@ void DMCUpdatePbyPWithRejectionFast::advanceWalker(Walker_t& thisWalker, bool re
         }
       }
     }
-    Psi.completeDistributedEvaluations(0, W.first(ig));
+    Psi.completeDistributedEvaluations(W.first(ig));
   }
 
   W.donePbyP();
@@ -229,7 +229,7 @@ void DMCUpdatePbyPWithRejectionFast::advanceWalker(Walker_t& thisWalker, bool re
         Psi.ratioGrad(W,first,grad_iat);
       }
       // Make sure we catch up remote nodes in our orbital group
-      Psi.completeDistributedEvaluations(0, first);
+      Psi.completeDistributedEvaluations(first);
     }
     
     if (made_Tmove) {

@@ -348,8 +348,7 @@ public:
   /// imbalance between nodes within a group that is distributing
   /// orbitals.  This should be called once per particle group.
   void
-  completeDistributedEvaluations(int generation,
-                                 int particle_group_first);
+  completeDistributedEvaluations(int particle_group_first);
 
   Communicate*
   getDistributedOrbitalComm() const;

@@ -302,7 +302,7 @@ public:
   virtual void rotate_B(const std::vector<RealType> &rot_mat) { };
 
   virtual void
-  completeDistributedEvaluations(int generation) 
+  completeDistributedEvaluations() 
   {
   }
 

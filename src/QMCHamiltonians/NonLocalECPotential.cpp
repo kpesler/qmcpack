@@ -198,7 +198,7 @@ NonLocalECPotential::evaluate(ParticleSet& P)
               }
             }
           }
-          Psi.completeDistributedEvaluations(0, P.first(ig));
+          Psi.completeDistributedEvaluations(P.first(ig));
         }   
       }
     }
@@ -240,7 +240,7 @@ NonLocalECPotential::evaluate(ParticleSet& P)
               Value += PP[iat]->evaluateOne(P,iat,Psi,iel,r,myTable->dr(nn),false,Txy);
             }
           }
-          Psi.completeDistributedEvaluations(0, P.first(ig));
+          Psi.completeDistributedEvaluations(P.first(ig));
         }
       }
     }
@@ -342,7 +342,7 @@ NonLocalECPotential::evaluate(ParticleSet& P, std::vector<NonLocalData>& Txy)
               }
             }
           }
-          Psi.completeDistributedEvaluations(0, P.first(ig));
+          Psi.completeDistributedEvaluations(P.first(ig));
         }   
       }
     }
@@ -381,7 +381,7 @@ NonLocalECPotential::evaluate(ParticleSet& P, std::vector<NonLocalData>& Txy)
               Value += PP[iat]->evaluateOne(P,iat,Psi,iel,r,myTable->dr(nn),true,Txy);
             }
           }
-          Psi.completeDistributedEvaluations(0, P.first(ig));
+          Psi.completeDistributedEvaluations(P.first(ig));
         }
       }
     }

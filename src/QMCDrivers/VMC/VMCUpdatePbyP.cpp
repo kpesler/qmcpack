@@ -116,7 +116,7 @@ void VMCUpdatePbyP::advanceWalker(Walker_t& thisWalker, bool recompute)
           Psi.rejectMove(iat);
         }
       }
-      Psi.completeDistributedEvaluations(iter, W.first(ig));
+      Psi.completeDistributedEvaluations(W.first(ig));
     }
     thisWalker.R=W.R;
   }

@@ -272,10 +272,9 @@ public:
   /// imbalance between nodes within a group that is distributing
   /// orbitals.  This should be called once per particle group.
   virtual void
-  completeDistributedEvaluations(int generation,
-                                 int iat_in_group) override
+  completeDistributedEvaluations(int iat_in_group) override
   {
-    Dets[getDetID(iat_in_group)]->completeDistributedEvaluations(generation);
+    Dets[getDetID(iat_in_group)]->completeDistributedEvaluations();
   }
 
   virtual Communicate*

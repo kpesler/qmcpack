@@ -211,7 +211,7 @@ public:
   advanceRemoteWalker()
   {
     for(int ig=0; ig<W.groups(); ++ig) {
-      Psi.completeDistributedEvaluations(0, W.first(ig));
+      Psi.completeDistributedEvaluations(W.first(ig));
     }
   }
 

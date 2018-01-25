@@ -248,9 +248,9 @@ public:
   virtual void get_ratios(ParticleSet& P, std::vector<ValueType>& ratios);
 
   virtual void
-  completeDistributedEvaluations(int generation) 
+  completeDistributedEvaluations() 
   {
-    Phi->completeDistributedEvaluations(generation);
+    Phi->completeDistributedEvaluations();
   }
 
   Communicate*
