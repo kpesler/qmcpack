@@ -6,7 +6,9 @@
 #include <memory>
 #include <omp.h>
 
-
+// This flag can be enabled to allow some overlapping of communication
+// and computation by separately waiting for sends and receives.
+// Thusfar, it has not improver performance.
 //#define SEPARATE_WAITS
 
 namespace qmcplusplus
@@ -52,10 +54,15 @@ class DistributedBsplineSet: public SPOSetBase, public SplineAdoptor
   typedef GradMatrix_t::value_type grad_type;
   typedef HessMatrix_t::value_type hess_type;
 
+  /// Vector to hold MPI_request objects returned by nonblocking send
+  /// and receive operations.
   std::vector<Communicate::request> requests;
   std::vector<Communicate::status>  statuses;
   std::vector<Communicate::request> send_requests;
   std::vector<Communicate::request> recv_requests;
+
+  /// Random unique tag value to distinguish data exchanges in this
+  /// class.  
   const int exchange_tag = 27183;
   using ExchangeType = BsplineExchangeData<PointType>;
 
@@ -63,7 +70,43 @@ class DistributedBsplineSet: public SPOSetBase, public SplineAdoptor
   static const int max_values_per_orbital = 13;
   int max_threads = 0;
 
+  /// The number of MPI ranks in this orbital group
+  int group_size=0;
   
+  /// Local rank within this groups MPI subcommunicator
+  int group_rank=0;
+
+  /// The number of local single-particle orbitals this rank is
+  /// responsible for storing and evaluating
+  int local_spos=0;
+
+  // We use shared_ptr so that when these objects are cloned, all clones
+  // have a pointer to the same underlying container.  This allows us
+  // to exchange data between threads.
+
+  /// Holds the resulting positions and evaluation types for all local
+  /// and remote nodes/threads in the orbital distribution group.
+  std::shared_ptr<std::vector<ExchangeType>> exchange_data_ptr;
+
+  /// Holds the local positions and evaluation types for each thread
+  /// in this node.  This will be exchanged with the other nodes in
+  /// the group to fill the contents of *exchange_data_ptr.
+  std::shared_ptr<std::vector<ExchangeType>> my_exchange_data_ptr;
+
+  /// Holds the orbital values/derivatives that are computed by the
+  /// local node on behalf of remote nodes.  Contiguous space is
+  /// allocated for remote node of sufficient capacity to hold the
+  /// worst-case payload of the value, gradient and Hessian for every
+  /// local orbital for each remote thread.  Views into this array a
+  /// provided by convenience functions below.
+  std::shared_ptr<ValueMatrix_t> send_values_ptr;
+
+  /// Holds the values/derivatives received from remote hosts that
+  /// evaluate orbitals on behalf of the local threads.  
+  std::shared_ptr<std::vector<ValueMatrix_t> > recv_values_ptr;
+
+  /// Convenience function to provide a vector view into the packed
+  /// storage array *send_values_ptr for a given rank and offset.
   inline VectorViewer<value_type>
   sendValues(int rank, int offset) 
   {
@@ -71,6 +114,9 @@ class DistributedBsplineSet: public SPOSetBase, public SplineAdoptor
       (*send_values_ptr)[max_threads*rank*max_values_per_orbital+offset],local_spos);
   }
 
+  /// Convenience function to provide a vector view of grad_type into
+  /// the packed storage array *send_values_ptr for a given rank and
+  /// offset.
   inline VectorViewer<grad_type>
   sendGradients(int rank, int offset) 
   {
@@ -78,6 +124,10 @@ class DistributedBsplineSet: public SPOSetBase, public SplineAdoptor
       (grad_type*)(*send_values_ptr)[max_threads*rank*max_values_per_orbital+offset],local_spos);
   }
 
+  /// Convenience function to provide a vector view of value_type into
+  /// the packed storage array *send_values_ptr for a given rank and
+  /// offset.  This is equivalent to sendValues above, but is included
+  /// for readability.
   inline VectorViewer<value_type>
   sendLaplacians(int rank, int offset) 
   {
@@ -85,6 +135,9 @@ class DistributedBsplineSet: public SPOSetBase, public SplineAdoptor
       (*send_values_ptr)[max_threads*rank*max_values_per_orbital+offset],local_spos);
   }
 
+  /// Convenience function to provide a vector view of hess_type into
+  /// the packed storage array *send_values_ptr for a given rank and
+  /// offset.  
   inline VectorViewer<hess_type>
   sendHessians(int rank, int offset) 
   {
@@ -92,6 +145,10 @@ class DistributedBsplineSet: public SPOSetBase, public SplineAdoptor
       (hess_type*)(*send_values_ptr)[max_threads*rank*max_values_per_orbital+offset],local_spos);
   }
 
+  /// Convenience function to provide a vector view into the packed
+  /// storage array *recv_values_ptr that holds all orbital values and
+  /// derivatives received from remote nodes in this nodes orbital
+  /// group for the specified rank and thread offset.
   inline VectorViewer<value_type>
   recvValues(int rank, int offset) 
   {
@@ -100,6 +157,9 @@ class DistributedBsplineSet: public SPOSetBase, public SplineAdoptor
     return VectorViewer<value_type>((*recv_values_ptr)[rank][offset], size);
   }
 
+  /// Convenience function to provide a vector view of gradient type
+  /// into the packed storage array *recv_values_ptr for the specified
+  /// rank and thread offset.
   inline VectorViewer<grad_type>
   recvGradients(int rank, int offset) 
   {
@@ -108,6 +168,9 @@ class DistributedBsplineSet: public SPOSetBase, public SplineAdoptor
     return VectorViewer<grad_type>((grad_type*)(*recv_values_ptr)[rank][offset+1], size);
   }
 
+  /// Convenience function to provide a vector view of into the packed
+  /// storage array *recv_values_ptr for the specified rank and thread
+  /// offset.
   inline VectorViewer<value_type>
   recvLaplacians(int rank, int offset) 
   {
@@ -116,6 +179,9 @@ class DistributedBsplineSet: public SPOSetBase, public SplineAdoptor
     return VectorViewer<value_type>((value_type*)(*recv_values_ptr)[rank][offset+4], size);
   }
 
+  /// Convenience function to provide a vector view of hess_type
+  /// into the packed storage array *recv_values_ptr for the specified
+  /// rank and thread offset.
   inline VectorViewer<hess_type>
   recvHessians(int rank, int offset) 
   {
@@ -124,36 +190,6 @@ class DistributedBsplineSet: public SPOSetBase, public SplineAdoptor
     return VectorViewer<hess_type>((hess_type*)(*recv_values_ptr)[rank][offset+4], size);
   }
 
-  inline VectorViewer<value_type>
-  recvVGL(int rank, int offset)
-  {
-    size_t size = 5*(SplineAdoptor::dist_spo_offsets[rank+1] - 
-                     SplineAdoptor::dist_spo_offsets[rank]);
-    return VectorViewer<value_type>((*recv_values_ptr)[rank][offset], size);
-  }
-
-  inline VectorViewer<value_type>
-  recvVGH(int rank, int offset)
-  {
-    size_t size = 13*(SplineAdoptor::dist_spo_offsets[rank+1] - 
-                     SplineAdoptor::dist_spo_offsets[rank]);
-    return VectorViewer<value_type>((*recv_values_ptr)[rank][offset], size);
-  }
-
-
-  // We use shared_ptr so that when this object is cloned, all clones
-  // have a pointer to the same underlying container.  This allows us
-  // to exchange data between threads.
-  std::shared_ptr<std::vector<ExchangeType>> exchange_data_ptr;
-  std::shared_ptr<std::vector<ExchangeType>> my_exchange_data_ptr;
-
-  std::shared_ptr<ValueMatrix_t> send_values_ptr;
-  std::shared_ptr<std::vector<ValueMatrix_t> > recv_values_ptr;
-
-
-  int group_size=0;
-  int group_rank=0;
-  int local_spos = 0;
 
   inline const typename SplineAdoptor::PointType
   groupPosition(int rank) 
@@ -162,7 +198,6 @@ class DistributedBsplineSet: public SPOSetBase, public SplineAdoptor
     return (*exchange_data_ptr)[rank*max_threads+ithread].position;
   }
 
-  int num_exch = 0;
   int
   exchangeData(const ExchangeType& my_data)
   {
@@ -193,7 +228,6 @@ class DistributedBsplineSet: public SPOSetBase, public SplineAdoptor
       }
     }
     return num_evals;
-
   }
 
 
@@ -505,7 +539,6 @@ public:
 #endif
   }
 
-  int num_VGH_calls=0;
   inline void evaluate(const ParticleSet& P, int iat,
                        ValueVector_t& psi, GradVector_t& dpsi, HessVector_t& grad_grad_psi)
   {
@@ -641,14 +674,17 @@ public:
     completeDistributedEvaluations();
   }
 
-  /** einspline does not need any other state data */
-  void evaluateVGL(const ParticleSet& P, int iat, VGLVector_t& vgl, bool newp)
+  /// This function is not available for DistributedBsplineSet. 
+  void 
+  evaluateVGL(const ParticleSet& P, int iat, VGLVector_t& vgl, bool newp)
   {
-    // app_log() << "evaluateVGL" << std::endl;
     abort();
     SplineAdoptor::evaluate_vgl_combo(P.R[iat],vgl);
   }
 
+  /// Operate this thread in a "slave" mode, computing orbital values
+  /// needed by other ranks/threads until all ranks and threads have
+  /// reached this point.
   virtual void
   completeDistributedEvaluations() override
   {
@@ -668,6 +704,8 @@ public:
     } while (num_evals);
   }
 
+  /// Returns a pointer to the communicator used by this orbital group
+  /// for exchanging positions and orbital values/derivatives.
   virtual Communicate*
   getDistributedOrbitalComm() const
   {
