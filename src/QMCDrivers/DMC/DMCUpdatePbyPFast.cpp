@@ -188,44 +188,58 @@ void DMCUpdatePbyPWithRejectionFast::advanceWalker(Walker_t& thisWalker, bool re
   Traces->buffer_sample(W.current_step);
 #endif
   if(UseTMove) {
+    // Attmpe to make a non-local move
     myTimers[DMC_tmoves]->start();
     int ibar = nonLocalOps.selectMove(RandomGen());
-    //make a non-local move
 
+    bool made_Tmove = false;
     // Loop over groups, so that
     for(int ig=0; ig<W.groups(); ++ig) {
       int first = W.first(ig), last=W.last(ig);
       bool called_ratio_for_group=false;
       if(ibar)  {
         int iat=nonLocalOps.id(ibar);
-        if (iat >= first && iat < last) {
+        if ((iat >= first) && (iat < last)) {
 #ifdef ENABLE_SOA
           W.setActive(iat);
 #endif
           if(W.makeMoveAndCheck(iat,nonLocalOps.delta(ibar)))  {
             called_ratio_for_group = true;
+            made_Tmove = true;
             GradType grad_iat;
             Psi.ratioGrad(W,iat,grad_iat);
             Psi.acceptMove(W,iat);
 #ifndef ENABLE_SOA
             W.acceptMove(iat);
 #endif
-            RealType logpsi = Psi.updateBuffer(W,w_buffer,false);
-            // debugging lines
-            //W.update(true);
-            //RealType logpsi2 = Psi.evaluateLog(W);
-            //if(logpsi!=logpsi2) std::cout << " logpsi " << logpsi << " logps2i " 
-            //  << logpsi2 << " diff " << logpsi2-logpsi << std::endl;
-            W.saveWalker(thisWalker);
             ++NonLocalMoveAccepted;
           }
         }
       }
-      if (true || !called_ratio_for_group) {
-        // Make sure we catch up remote nodes in our orbital group
-        Psi.completeDistributedEvaluations(0, first);
+      if (!called_ratio_for_group) {
+        // Dummy call to get DiracDeterminantBase out of
+        // ORB_PBYP_RATIO UpdateMode.  It entered this mode as a
+        // result of evaluating the nonlocal psuedopotentials.  If it
+        // remains in this mode, it will force a reevaluation of all
+        // laplacians and gradients of orbitals for the walker if a
+        // T-move is accepted.  This behavior appears to be a
+        // vestigial side-effect of a design before the addition of
+        // nonlocal pseudopotentials and T-moves.
+        GradType grad_iat;
+        Psi.ratioGrad(W,first,grad_iat);
       }
-    }    
+      // Make sure we catch up remote nodes in our orbital group
+      Psi.completeDistributedEvaluations(0, first);
+    }
+    
+    if (made_Tmove) {
+      // Note, due to the above calls to Psi.ratioGrad for both
+      // species, this call to updateBuffer should not generate any
+      // calls to the orbital evaluation.
+      RealType logpsi = Psi.updateBuffer(W,w_buffer,false);
+      W.saveWalker(thisWalker);
+    } 
+    
     myTimers[DMC_tmoves]->stop();
   }
 
