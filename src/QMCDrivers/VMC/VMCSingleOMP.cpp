@@ -132,7 +132,7 @@ bool VMCSingleOMP::run()
         // Call dummy routine to advance remote walkers
         int my_num_walkers = wPerNode[ip+1] - wPerNode[ip];
         for (int i=0; i < (max_thread_walkers - my_num_walkers); ++i) {
-          Movers[ip]->advanceRemoteWalker(false);
+          Movers[ip]->advanceRemoteWalker();
         }
 
         if(has_collectables)

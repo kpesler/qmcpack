@@ -208,7 +208,7 @@ public:
    *  in the presence of walker population imbalance between nodes.
    */
   virtual void
-  advanceRemoteWalker(bool recompute)
+  advanceRemoteWalker()
   {
     for(int ig=0; ig<W.groups(); ++ig) {
       Psi.completeDistributedEvaluations(0, W.first(ig));

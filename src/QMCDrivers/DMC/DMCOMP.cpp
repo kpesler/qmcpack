@@ -312,7 +312,7 @@ bool DMCOMP::run()
         // Call dummy routine to advance remote walkers
         int my_num_walkers = wPerNode[ip+1] - wPerNode[ip];
         for (int i=0; i < (max_walkers - my_num_walkers); ++i) {
-          Movers[ip]->advanceRemoteWalker(false);
+          Movers[ip]->advanceRemoteWalker();
         }
 
         Movers[ip]->setMultiplicity(wit,wit_end);
@@ -334,15 +334,15 @@ bool DMCOMP::run()
           // Call dummy routine to advance remote walkers
           int my_num_walkers = wPerNode[ip+1] - wPerNode[ip];
           // A call to DMCUpdatePbyP makes two passes through the
-          // electron species:  first to advance all the walkers, and
-          // the second to compute the NonlocalECPotential. If we're
-          // using T-moves, we need a third pass for the final Tmove
-          // ratio. 
-          int updates_per_walker = 2 + Movers[ip]->usingTMoves();
+          // electron species: first to advance all the walkers, then
+          // to compute the NonlocalECPotential. If we're using
+          // T-moves, we need a one more pass for the final Tmove
+          // ratio.
+          int updates_per_walker = 2 + (int)Movers[ip]->usingTMoves();
           int num_remote_updates = 
             updates_per_walker * (max_walkers - my_num_walkers);
           for (int iw=0; iw < num_remote_updates; ++iw) {
-            Movers[ip]->advanceRemoteWalker(recompute);
+            Movers[ip]->advanceRemoteWalker();
           }
         }
         else {
